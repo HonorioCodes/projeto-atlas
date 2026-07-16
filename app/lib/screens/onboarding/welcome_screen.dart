@@ -1,3 +1,4 @@
+import '../../models/user_registration.dart';
 import 'package:flutter/material.dart';
 import 'personal_data_screen.dart';
 
@@ -41,16 +42,20 @@ class WelcomeScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const PersonalDataScreen(),
-                    ),
-                  );
-                },
-                child: const Text('Continuar'),
-              ),
+  onPressed: () {
+    final registration = UserRegistration();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PersonalDataScreen(
+          registration: registration,
+        ),
+      ),
+    );
+  },
+  child: const Text('Continuar'),
+),
             ),
           ],
         ),

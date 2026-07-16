@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import '../screens/home/home_screen.dart';
+import '../screens/startup/startup_screen.dart';
 
 class PassoAPassoApp extends StatelessWidget {
   const PassoAPassoApp({super.key});
@@ -26,7 +26,7 @@ class PassoAPassoApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const HomeScreen(),
+      home: const StartupScreen(),
     );
   }
 }

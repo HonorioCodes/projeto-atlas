@@ -1,8 +1,14 @@
+import '../../models/user_registration.dart';
 import 'package:flutter/material.dart';
 import 'physical_data_screen.dart';
 
 class PersonalDataScreen extends StatefulWidget {
-  const PersonalDataScreen({super.key});
+  final UserRegistration registration;
+
+  const PersonalDataScreen({
+    super.key,
+    required this.registration,
+  });
 
   @override
   State<PersonalDataScreen> createState() => _PersonalDataScreenState();
@@ -113,32 +119,45 @@ class _PersonalDataScreenState extends State<PersonalDataScreen> {
                 ),
                 const SizedBox(height: 32),
                 ElevatedButton(
-                  onPressed: () {
-                    final isFormValid =
-                        _formKey.currentState?.validate() ?? false;
+  onPressed: () {
+    final isFormValid =
+        _formKey.currentState?.validate() ?? false;
 
-                    if (!isFormValid) {
-                      return;
-                    }
+    if (!isFormValid) {
+      return;
+    }
 
-                   if (_birthDate == null) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Selecione sua data de nascimento'),
-    ),
-  );
-  return;
-}
+    if (_birthDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Selecione sua data de nascimento',
+          ),
+        ),
+      );
+      return;
+    }
 
-Navigator.push(
-  context,
-  MaterialPageRoute(
-    builder: (context) => const PhysicalDataScreen(),
-  ),
-);
-                  },
-                  child: const Text('Continuar'),
-                ),
+    widget.registration.name =
+        _nameController.text.trim();
+
+    widget.registration.birthDate =
+        _birthDate;
+
+    widget.registration.sex =
+        _selectedSex;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PhysicalDataScreen(
+          registration: widget.registration,
+        ),
+      ),
+    );
+  },
+  child: const Text('Continuar'),
+),
               ],
             ),
           ),

@@ -1,8 +1,15 @@
-import '../plans/plans_screen.dart';
+import '../../services/user_storage_service.dart';
 import 'package:flutter/material.dart';
+import '../../models/user_registration.dart';
+import '../plans/plans_screen.dart';
 
 class PhysicalDataScreen extends StatefulWidget {
-  const PhysicalDataScreen({super.key});
+  final UserRegistration registration;
+
+  const PhysicalDataScreen({
+    super.key,
+    required this.registration,
+  });
 
   @override
   State<PhysicalDataScreen> createState() => _PhysicalDataScreenState();
@@ -146,7 +153,7 @@ class _PhysicalDataScreenState extends State<PhysicalDataScreen> {
                 ),
                 const SizedBox(height: 32),
                 ElevatedButton(
-  onPressed: () {
+  onPressed: () async {
     final isFormValid =
         _formKey.currentState?.validate() ?? false;
 
@@ -154,11 +161,40 @@ class _PhysicalDataScreenState extends State<PhysicalDataScreen> {
       return;
     }
 
-    Navigator.push(
-      context,
+    widget.registration.height = double.parse(
+      _heightController.text.replaceAll(',', '.'),
+    );
+
+    widget.registration.currentWeight = double.parse(
+      _currentWeightController.text.replaceAll(',', '.'),
+    );
+
+    final targetWeightText =
+        _targetWeightController.text.trim();
+
+    widget.registration.targetWeight =
+        targetWeightText.isEmpty
+            ? null
+            : double.parse(
+                targetWeightText.replaceAll(',', '.'),
+              );
+
+    widget.registration.mainGoal = _selectedGoal;
+
+    final user = widget.registration.toUserModel();
+    final storageService = UserStorageService();
+
+    await storageService.saveUser(user);
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (context) => const PlansScreen(),
       ),
+      (route) => false,
     );
   },
   child: const Text('Finalizar cadastro'),
