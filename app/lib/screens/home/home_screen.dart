@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../plans/plans_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -38,7 +39,14 @@ class HomeScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                        builder: (context) => const PlansScreen(),
+    ),
+  );
+},
                   child: const Text('Começar'),
                 ),
               ),
