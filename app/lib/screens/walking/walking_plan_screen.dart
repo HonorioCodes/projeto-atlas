@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/plan_storage_service.dart';
+import '../../services/workout_progress_service.dart';
 import '../plans/plans_screen.dart';
 
 class WalkingPlanScreen extends StatefulWidget {
@@ -11,13 +12,55 @@ class WalkingPlanScreen extends StatefulWidget {
       _WalkingPlanScreenState();
 }
 
-class _WalkingPlanScreenState
-    extends State<WalkingPlanScreen> {
-  final List<bool> _completedWorkouts = [
+class _WalkingPlanScreenState extends State<WalkingPlanScreen> {
+  static const String _planId = 'walking';
+
+  final WorkoutProgressService _progressService =
+      WorkoutProgressService();
+
+  List<bool> _completedWorkouts = [
     false,
     false,
     false,
   ];
+
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProgress();
+  }
+
+  Future<void> _loadProgress() async {
+    final progress = await _progressService.loadProgress(
+      _planId,
+      _completedWorkouts.length,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _completedWorkouts = progress;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _updateWorkout(
+    int index,
+    bool isCompleted,
+  ) async {
+    setState(() {
+      _completedWorkouts[index] = isCompleted;
+    });
+
+    await _progressService.saveProgress(
+      _planId,
+      _completedWorkouts,
+    );
+  }
 
   double get _progress {
     final completed = _completedWorkouts
@@ -53,9 +96,10 @@ class _WalkingPlanScreenState
       child: CheckboxListTile(
         value: _completedWorkouts[index],
         onChanged: (value) {
-          setState(() {
-            _completedWorkouts[index] = value ?? false;
-          });
+          _updateWorkout(
+            index,
+            value ?? false,
+          );
         },
         title: Text(title),
         subtitle: Padding(
@@ -79,7 +123,9 @@ class _WalkingPlanScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Caminhada para Iniciantes'),
+        title: const Text(
+          'Caminhada para Iniciantes',
+        ),
         actions: [
           IconButton(
             onPressed: _changePlan,
@@ -88,49 +134,54 @@ class _WalkingPlanScreenState
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Semana 1',
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '$completed de 3 treinos concluídos',
-          ),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: _progress,
-            minHeight: 8,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          const SizedBox(height: 24),
-          _buildWorkoutCard(
-            index: 0,
-            title: 'Treino 1',
-            duration: '30 minutos',
-            description:
-                '5 min leves, 20 min de caminhada e 5 min leves.',
-          ),
-          _buildWorkoutCard(
-            index: 1,
-            title: 'Treino 2',
-            duration: '35 minutos',
-            description:
-                '5 min leves, 25 min de caminhada e 5 min leves.',
-          ),
-          _buildWorkoutCard(
-            index: 2,
-            title: 'Treino 3',
-            duration: '40 minutos',
-            description:
-                '5 min leves, 30 min de caminhada e 5 min leves.',
-          ),
-        ],
-      ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text(
+                  'Semana 1',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$completed de 3 treinos concluídos',
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: _progress,
+                  minHeight: 8,
+                  borderRadius:
+                      BorderRadius.circular(8),
+                ),
+                const SizedBox(height: 24),
+                _buildWorkoutCard(
+                  index: 0,
+                  title: 'Treino 1',
+                  duration: '30 minutos',
+                  description:
+                      '5 min leves, 20 min de caminhada e 5 min leves.',
+                ),
+                _buildWorkoutCard(
+                  index: 1,
+                  title: 'Treino 2',
+                  duration: '35 minutos',
+                  description:
+                      '5 min leves, 25 min de caminhada e 5 min leves.',
+                ),
+                _buildWorkoutCard(
+                  index: 2,
+                  title: 'Treino 3',
+                  duration: '40 minutos',
+                  description:
+                      '5 min leves, 30 min de caminhada e 5 min leves.',
+                ),
+              ],
+            ),
     );
   }
 }
