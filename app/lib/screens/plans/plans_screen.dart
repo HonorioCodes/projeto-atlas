@@ -32,7 +32,7 @@ class PlansScreen extends StatelessWidget {
     (route) => false,
   );
 },
-              child: const Text('Caminhada Inteligente'),
+              child: const Text('Caminhada para Iniciantes'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
