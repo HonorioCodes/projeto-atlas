@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../plans/plans_screen.dart';
+import '../onboarding/welcome_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -40,12 +41,12 @@ class HomeScreen extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                        builder: (context) => const PlansScreen(),
-    ),
-  );
+Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (context) => const WelcomeScreen(),
+  ),
+);
 },
                   child: const Text('Começar'),
                 ),
