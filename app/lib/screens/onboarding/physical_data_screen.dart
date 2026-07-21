@@ -186,7 +186,7 @@ class _PhysicalDataScreenState extends State<PhysicalDataScreen> {
 
     await storageService.saveUser(user);
 
-    if (!mounted) {
+    if (!context.mounted) {
       return;
     }
 
