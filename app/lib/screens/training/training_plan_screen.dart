@@ -7,6 +7,7 @@ import '../../services/plan_storage_service.dart';
 import '../../services/workout_progress_service.dart';
 import '../plans/plans_screen.dart';
 import '../workout/workout_detail_screen.dart';
+import '../location/location_setup_screen.dart';
 
 class TrainingPlanScreen extends StatefulWidget {
   final String planId;
@@ -88,6 +89,16 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       _completedWorkouts = progress;
       _isLoading = false;
     });
+  }
+
+  Future<void> _openLocationSetup() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return const LocationSetupScreen();
+        },
+      ),
+    );
   }
 
   Future<void> _updateWorkout(int index, bool isCompleted) async {
@@ -333,6 +344,11 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       appBar: AppBar(
         title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
+          IconButton(
+            onPressed: _openLocationSetup,
+            icon: const Icon(Icons.gps_fixed),
+            tooltip: 'Configurar GPS',
+          ),
           IconButton(
             onPressed: _openHistory,
             icon: const Icon(Icons.history),
