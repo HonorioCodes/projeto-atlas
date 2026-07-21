@@ -5,6 +5,7 @@ import '../../models/workout_model.dart';
 import '../../services/plan_storage_service.dart';
 import '../../services/workout_progress_service.dart';
 import '../plans/plans_screen.dart';
+import '../workout/workout_detail_screen.dart';
 
 class TrainingPlanScreen extends StatefulWidget {
   final String planId;
@@ -24,7 +25,8 @@ class TrainingPlanScreen extends StatefulWidget {
   }
 }
 
-class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
+class _TrainingPlanScreenState
+    extends State<TrainingPlanScreen> {
   final WorkoutProgressService _progressService =
       WorkoutProgressService();
 
@@ -115,6 +117,43 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     await _progressService.saveProgress(
       widget.planId,
       _completedWorkouts,
+    );
+  }
+
+  Future<void> _openWorkoutDetails({
+    required int index,
+    required WorkoutModel workout,
+    required bool isUnlocked,
+  }) async {
+    if (!isUnlocked) {
+      return;
+    }
+
+    final newStatus =
+        await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) {
+          return WorkoutDetailScreen(
+            workout: workout,
+            isCompleted:
+                _completedWorkouts[index],
+          );
+        },
+      ),
+    );
+
+    if (newStatus == null) {
+      return;
+    }
+
+    if (newStatus ==
+        _completedWorkouts[index]) {
+      return;
+    }
+
+    await _updateWorkout(
+      index,
+      newStatus,
     );
   }
 
@@ -211,24 +250,22 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         margin: const EdgeInsets.only(
           bottom: 12,
         ),
-        child: CheckboxListTile(
-          value: _completedWorkouts[index],
-          onChanged: isUnlocked
-              ? (value) {
-                  _updateWorkout(
-                    index,
-                    value ?? false,
+        child: ListTile(
+          onTap: isUnlocked
+              ? () {
+                  _openWorkoutDetails(
+                    index: index,
+                    workout: workout,
+                    isUnlocked: isUnlocked,
                   );
                 }
               : null,
-          secondary: isUnlocked
-              ? null
-              : const Icon(
-                  Icons.lock_outline,
-                ),
-          title: Text(
-            workout.title,
+          leading: Icon(
+            isUnlocked
+                ? Icons.directions_walk
+                : Icons.lock_outline,
           ),
+          title: Text(workout.title),
           subtitle: Padding(
             padding: const EdgeInsets.only(
               top: 6,
@@ -239,8 +276,18 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
             ),
           ),
           isThreeLine: true,
-          controlAffinity:
-              ListTileControlAffinity.trailing,
+          trailing: isUnlocked
+              ? Checkbox(
+                  value:
+                      _completedWorkouts[index],
+                  onChanged: (value) {
+                    _updateWorkout(
+                      index,
+                      value ?? false,
+                    );
+                  },
+                )
+              : null,
         ),
       ),
     );
@@ -307,9 +354,7 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
                   Icons.lock_outline,
                   size: 18,
                 ),
-                label: Text(
-                  'Bloqueada',
-                ),
+                label: Text('Bloqueada'),
               )
             else if (isCompleted)
               const Chip(
@@ -317,9 +362,7 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
                   Icons.check_circle_outline,
                   size: 18,
                 ),
-                label: Text(
-                  'Concluída',
-                ),
+                label: Text('Concluída'),
               )
             else if (isCurrent)
               const Chip(
@@ -327,18 +370,14 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
                   Icons.play_circle_outline,
                   size: 18,
                 ),
-                label: Text(
-                  'Atual',
-                ),
+                label: Text('Atual'),
               ),
           ],
         ),
       );
 
       widgets.add(
-        const SizedBox(
-          height: 8,
-        ),
+        const SizedBox(height: 8),
       );
 
       if (isUnlocked) {
@@ -358,9 +397,7 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       }
 
       widgets.add(
-        const SizedBox(
-          height: 12,
-        ),
+        const SizedBox(height: 12),
       );
 
       for (final workout in week.workouts) {
@@ -376,9 +413,7 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       }
 
       widgets.add(
-        const SizedBox(
-          height: 16,
-        ),
+        const SizedBox(height: 16),
       );
     }
 
@@ -411,29 +446,21 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                const Text(
-                  'Progresso geral',
-                ),
-                const SizedBox(
-                  height: 8,
-                ),
+                const Text('Progresso geral'),
+                const SizedBox(height: 8),
                 Text(
                   '$_completedCount de '
                   '$_workoutCount '
                   'treinos concluídos',
                 ),
-                const SizedBox(
-                  height: 8,
-                ),
+                const SizedBox(height: 8),
                 LinearProgressIndicator(
                   value: _progress,
                   minHeight: 8,
                   borderRadius:
                       BorderRadius.circular(8),
                 ),
-                const SizedBox(
-                  height: 24,
-                ),
+                const SizedBox(height: 24),
                 ..._buildWeeks(context),
               ],
             ),
