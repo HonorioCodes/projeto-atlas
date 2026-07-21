@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/workout_model.dart';
+import 'workout_session_screen.dart';
 
 class WorkoutDetailScreen extends StatelessWidget {
   final WorkoutModel workout;
@@ -11,6 +12,37 @@ class WorkoutDetailScreen extends StatelessWidget {
     required this.workout,
     required this.isCompleted,
   });
+
+  Future<void> _startWorkout(
+    BuildContext context,
+  ) async {
+    final completed =
+        await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) {
+          return WorkoutSessionScreen(
+            workout: workout,
+          );
+        },
+      ),
+    );
+
+    if (!context.mounted) {
+      return;
+    }
+
+    if (completed == true) {
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  void _changeWorkoutStatus(
+    BuildContext context,
+  ) {
+    Navigator.of(context).pop(
+      !isCompleted,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,8 +59,12 @@ class WorkoutDetailScreen extends StatelessWidget {
                 Icons.timer_outlined,
                 size: 32,
               ),
-              title: const Text('Duração estimada'),
-              subtitle: Text(workout.duration),
+              title: const Text(
+                'Duração estimada',
+              ),
+              subtitle: Text(
+                workout.duration,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -48,9 +84,21 @@ class WorkoutDetailScreen extends StatelessWidget {
           const SizedBox(height: 32),
           ElevatedButton.icon(
             onPressed: () {
-              Navigator.of(context).pop(
-                !isCompleted,
-              );
+              _startWorkout(context);
+            },
+            icon: const Icon(
+              Icons.play_arrow,
+            ),
+            label: Text(
+              isCompleted
+                  ? 'Repetir treino'
+                  : 'Iniciar treino',
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () {
+              _changeWorkoutStatus(context);
             },
             icon: Icon(
               isCompleted
