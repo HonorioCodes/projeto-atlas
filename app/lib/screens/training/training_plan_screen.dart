@@ -55,6 +55,26 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     return _completedCount / _workoutCount;
   }
 
+  int get _currentWeekIndex {
+    for (
+      var weekIndex = 0;
+      weekIndex < widget.weeks.length;
+      weekIndex++
+    ) {
+      final isUnlocked =
+          _isWeekUnlocked(weekIndex);
+
+      final isCompleted =
+          _isWeekCompleted(weekIndex);
+
+      if (isUnlocked && !isCompleted) {
+        return weekIndex;
+      }
+    }
+
+    return widget.weeks.length - 1;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -118,8 +138,13 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
   int _getWeekStartIndex(int weekIndex) {
     var startIndex = 0;
 
-    for (var index = 0; index < weekIndex; index++) {
-      startIndex += widget.weeks[index].workouts.length;
+    for (
+      var index = 0;
+      index < weekIndex;
+      index++
+    ) {
+      startIndex +=
+          widget.weeks[index].workouts.length;
     }
 
     return startIndex;
@@ -130,13 +155,16 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       return true;
     }
 
-    final previousWeekIndex = weekIndex - 1;
+    final previousWeekIndex =
+        weekIndex - 1;
 
     final previousWeek =
         widget.weeks[previousWeekIndex];
 
     final previousWeekStartIndex =
-        _getWeekStartIndex(previousWeekIndex);
+        _getWeekStartIndex(
+      previousWeekIndex,
+    );
 
     final previousWeekEndIndex =
         previousWeekStartIndex +
@@ -146,6 +174,26 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         .sublist(
           previousWeekStartIndex,
           previousWeekEndIndex,
+        )
+        .every(
+          (workout) => workout,
+        );
+  }
+
+  bool _isWeekCompleted(int weekIndex) {
+    final week =
+        widget.weeks[weekIndex];
+
+    final startIndex =
+        _getWeekStartIndex(weekIndex);
+
+    final endIndex =
+        startIndex + week.workouts.length;
+
+    return _completedWorkouts
+        .sublist(
+          startIndex,
+          endIndex,
         )
         .every(
           (workout) => workout,
@@ -210,15 +258,26 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       weekIndex < widget.weeks.length;
       weekIndex++
     ) {
-      final week = widget.weeks[weekIndex];
+      final week =
+          widget.weeks[weekIndex];
 
       final isUnlocked =
           _isWeekUnlocked(weekIndex);
 
-      final firstIndex = workoutIndex;
+      final isCompleted =
+          _isWeekCompleted(weekIndex);
+
+      final isCurrent =
+          isUnlocked &&
+          !isCompleted &&
+          weekIndex == _currentWeekIndex;
+
+      final firstIndex =
+          workoutIndex;
 
       final lastIndex =
-          firstIndex + week.workouts.length;
+          firstIndex +
+          week.workouts.length;
 
       final completedInWeek =
           _completedWorkouts
@@ -243,8 +302,34 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
               ),
             ),
             if (!isUnlocked)
-              const Icon(
-                Icons.lock_outline,
+              const Chip(
+                avatar: Icon(
+                  Icons.lock_outline,
+                  size: 18,
+                ),
+                label: Text(
+                  'Bloqueada',
+                ),
+              )
+            else if (isCompleted)
+              const Chip(
+                avatar: Icon(
+                  Icons.check_circle_outline,
+                  size: 18,
+                ),
+                label: Text(
+                  'Concluída',
+                ),
+              )
+            else if (isCurrent)
+              const Chip(
+                avatar: Icon(
+                  Icons.play_circle_outline,
+                  size: 18,
+                ),
+                label: Text(
+                  'Atual',
+                ),
               ),
           ],
         ),
