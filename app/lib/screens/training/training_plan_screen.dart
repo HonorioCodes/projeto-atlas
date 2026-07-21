@@ -19,8 +19,9 @@ class TrainingPlanScreen extends StatefulWidget {
   });
 
   @override
-  State<TrainingPlanScreen> createState() =>
-      _TrainingPlanScreenState();
+  State<TrainingPlanScreen> createState() {
+    return _TrainingPlanScreenState();
+  }
 }
 
 class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
@@ -28,12 +29,15 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       WorkoutProgressService();
 
   late List<bool> _completedWorkouts;
+
   bool _isLoading = true;
 
   int get _workoutCount {
     return widget.weeks.fold<int>(
       0,
-      (total, week) => total + week.workouts.length,
+      (total, week) {
+        return total + week.workouts.length;
+      },
     );
   }
 
@@ -64,7 +68,8 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
   }
 
   Future<void> _loadProgress() async {
-    final progress = await _progressService.loadProgress(
+    final progress =
+        await _progressService.loadProgress(
       widget.planId,
       _workoutCount,
     );
@@ -102,86 +107,194 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (context) => const PlansScreen(),
+        builder: (context) {
+          return const PlansScreen();
+        },
       ),
       (route) => false,
     );
   }
 
+  int _getWeekStartIndex(int weekIndex) {
+    var startIndex = 0;
+
+    for (var index = 0; index < weekIndex; index++) {
+      startIndex += widget.weeks[index].workouts.length;
+    }
+
+    return startIndex;
+  }
+
+  bool _isWeekUnlocked(int weekIndex) {
+    if (weekIndex == 0) {
+      return true;
+    }
+
+    final previousWeekIndex = weekIndex - 1;
+
+    final previousWeek =
+        widget.weeks[previousWeekIndex];
+
+    final previousWeekStartIndex =
+        _getWeekStartIndex(previousWeekIndex);
+
+    final previousWeekEndIndex =
+        previousWeekStartIndex +
+        previousWeek.workouts.length;
+
+    return _completedWorkouts
+        .sublist(
+          previousWeekStartIndex,
+          previousWeekEndIndex,
+        )
+        .every(
+          (workout) => workout,
+        );
+  }
+
   Widget _buildWorkoutCard({
     required int index,
     required WorkoutModel workout,
+    required bool isUnlocked,
   }) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: CheckboxListTile(
-        value: _completedWorkouts[index],
-        onChanged: (value) {
-          _updateWorkout(
-            index,
-            value ?? false,
-          );
-        },
-        title: Text(workout.title),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            '${workout.duration}\n${workout.description}',
-          ),
+    return Opacity(
+      opacity: isUnlocked ? 1 : 0.55,
+      child: Card(
+        margin: const EdgeInsets.only(
+          bottom: 12,
         ),
-        isThreeLine: true,
-        controlAffinity:
-            ListTileControlAffinity.trailing,
+        child: CheckboxListTile(
+          value: _completedWorkouts[index],
+          onChanged: isUnlocked
+              ? (value) {
+                  _updateWorkout(
+                    index,
+                    value ?? false,
+                  );
+                }
+              : null,
+          secondary: isUnlocked
+              ? null
+              : const Icon(
+                  Icons.lock_outline,
+                ),
+          title: Text(
+            workout.title,
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(
+              top: 6,
+            ),
+            child: Text(
+              '${workout.duration}\n'
+              '${workout.description}',
+            ),
+          ),
+          isThreeLine: true,
+          controlAffinity:
+              ListTileControlAffinity.trailing,
+        ),
       ),
     );
   }
 
-  List<Widget> _buildWeeks(BuildContext context) {
+  List<Widget> _buildWeeks(
+    BuildContext context,
+  ) {
     final widgets = <Widget>[];
+
     var workoutIndex = 0;
 
-    for (final week in widget.weeks) {
+    for (
+      var weekIndex = 0;
+      weekIndex < widget.weeks.length;
+      weekIndex++
+    ) {
+      final week = widget.weeks[weekIndex];
+
+      final isUnlocked =
+          _isWeekUnlocked(weekIndex);
+
       final firstIndex = workoutIndex;
+
       final lastIndex =
           firstIndex + week.workouts.length;
 
-      final completedInWeek = _completedWorkouts
-          .sublist(firstIndex, lastIndex)
-          .where((workout) => workout)
-          .length;
+      final completedInWeek =
+          _completedWorkouts
+              .sublist(
+                firstIndex,
+                lastIndex,
+              )
+              .where(
+                (workout) => workout,
+              )
+              .length;
 
       widgets.add(
-        Text(
-          week.title,
-          style: Theme.of(context)
-              .textTheme
-              .headlineSmall,
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                week.title,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall,
+              ),
+            ),
+            if (!isUnlocked)
+              const Icon(
+                Icons.lock_outline,
+              ),
+          ],
         ),
       );
 
-      widgets.add(const SizedBox(height: 8));
-
       widgets.add(
-        Text(
-          '$completedInWeek de '
-          '${week.workouts.length} treinos concluídos',
+        const SizedBox(
+          height: 8,
         ),
       );
 
-      widgets.add(const SizedBox(height: 12));
+      if (isUnlocked) {
+        widgets.add(
+          Text(
+            '$completedInWeek de '
+            '${week.workouts.length} '
+            'treinos concluídos',
+          ),
+        );
+      } else {
+        widgets.add(
+          const Text(
+            'Conclua a semana anterior para liberar.',
+          ),
+        );
+      }
+
+      widgets.add(
+        const SizedBox(
+          height: 12,
+        ),
+      );
 
       for (final workout in week.workouts) {
         widgets.add(
           _buildWorkoutCard(
             index: workoutIndex,
             workout: workout,
+            isUnlocked: isUnlocked,
           ),
         );
 
         workoutIndex++;
       }
 
-      widgets.add(const SizedBox(height: 16));
+      widgets.add(
+        const SizedBox(
+          height: 16,
+        ),
+      );
     }
 
     return widgets;
@@ -199,7 +312,9 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         actions: [
           IconButton(
             onPressed: _changePlan,
-            icon: const Icon(Icons.swap_horiz),
+            icon: const Icon(
+              Icons.swap_horiz,
+            ),
             tooltip: 'Trocar plano',
           ),
         ],
@@ -211,20 +326,29 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                const Text('Progresso geral'),
-                const SizedBox(height: 8),
+                const Text(
+                  'Progresso geral',
+                ),
+                const SizedBox(
+                  height: 8,
+                ),
                 Text(
                   '$_completedCount de '
-                  '$_workoutCount treinos concluídos',
+                  '$_workoutCount '
+                  'treinos concluídos',
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(
+                  height: 8,
+                ),
                 LinearProgressIndicator(
                   value: _progress,
                   minHeight: 8,
                   borderRadius:
                       BorderRadius.circular(8),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(
+                  height: 24,
+                ),
                 ..._buildWeeks(context),
               ],
             ),
