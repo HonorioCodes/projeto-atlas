@@ -1,191 +1,434 @@
 import '../models/training_week_model.dart';
 import '../models/workout_model.dart';
+import '../models/workout_step_model.dart';
 
-const List<TrainingWeekModel> walkingTrainingWeeks = [
+String _durationLabel(int totalSeconds) {
+  final minutes = totalSeconds ~/ 60;
+  final seconds = totalSeconds % 60;
+
+  if (seconds == 0) {
+    return '$minutes minutos';
+  }
+
+  return '$minutes min ${seconds}s';
+}
+
+String _intervalLabel(int seconds) {
+  final minutes = seconds ~/ 60;
+  final remainingSeconds = seconds % 60;
+
+  if (minutes == 0) {
+    return '$remainingSeconds segundos';
+  }
+
+  if (remainingSeconds == 0) {
+    return minutes == 1
+        ? '1 minuto'
+        : '$minutes minutos';
+  }
+
+  return '$minutes min e ${remainingSeconds}s';
+}
+
+WorkoutModel _steadyWalkingWorkout({
+  required String title,
+  required int warmUpMinutes,
+  required int walkingMinutes,
+  required int coolDownMinutes,
+}) {
+  final totalMinutes =
+      warmUpMinutes + walkingMinutes + coolDownMinutes;
+
+  return WorkoutModel(
+    title: title,
+    duration: '$totalMinutes minutos',
+    description:
+        '$warmUpMinutes min leves, '
+        '$walkingMinutes min de caminhada e '
+        '$coolDownMinutes min leves.',
+    steps: [
+      WorkoutStepModel(
+        title: 'Aquecimento',
+        instruction:
+            'Caminhe devagar e prepare o corpo para o treino.',
+        durationSeconds: warmUpMinutes * 60,
+      ),
+      WorkoutStepModel(
+        title: 'Caminhada',
+        instruction:
+            'Mantenha um ritmo confortável e constante.',
+        durationSeconds: walkingMinutes * 60,
+      ),
+      WorkoutStepModel(
+        title: 'Desaceleração',
+        instruction:
+            'Diminua o ritmo gradualmente até finalizar.',
+        durationSeconds: coolDownMinutes * 60,
+      ),
+    ],
+  );
+}
+
+WorkoutModel _alternatingWalkingWorkout({
+  required String title,
+  required int warmUpMinutes,
+  required int repetitions,
+  required int comfortableMinutes,
+  required int fasterMinutes,
+  required int coolDownMinutes,
+}) {
+  final totalMinutes =
+      warmUpMinutes +
+      repetitions *
+          (comfortableMinutes + fasterMinutes) +
+      coolDownMinutes;
+
+  final steps = <WorkoutStepModel>[
+    WorkoutStepModel(
+      title: 'Aquecimento',
+      instruction:
+          'Caminhe devagar e prepare o corpo.',
+      durationSeconds: warmUpMinutes * 60,
+    ),
+  ];
+
+  for (
+    var repetition = 1;
+    repetition <= repetitions;
+    repetition++
+  ) {
+    steps.add(
+      WorkoutStepModel(
+        title: 'Ritmo confortável $repetition/$repetitions',
+        instruction:
+            'Caminhe em um ritmo que permita conversar.',
+        durationSeconds: comfortableMinutes * 60,
+      ),
+    );
+
+    steps.add(
+      WorkoutStepModel(
+        title: 'Ritmo acelerado $repetition/$repetitions',
+        instruction:
+            'Aumente o ritmo sem precisar correr.',
+        durationSeconds: fasterMinutes * 60,
+      ),
+    );
+  }
+
+  steps.add(
+    WorkoutStepModel(
+      title: 'Desaceleração',
+      instruction:
+          'Diminua o ritmo gradualmente.',
+      durationSeconds: coolDownMinutes * 60,
+    ),
+  );
+
+  return WorkoutModel(
+    title: title,
+    duration: '$totalMinutes minutos',
+    description:
+        'Após o aquecimento, alterne '
+        '$comfortableMinutes min em ritmo confortável '
+        'com $fasterMinutes min em ritmo acelerado.',
+    steps: steps,
+  );
+}
+
+WorkoutModel _runWalkWorkout({
+  required String title,
+  required int warmUpSeconds,
+  required int repetitions,
+  required int runningSeconds,
+  required int walkingSeconds,
+  required int coolDownSeconds,
+  String? additionalInstruction,
+}) {
+  final totalSeconds =
+      warmUpSeconds +
+      repetitions *
+          (runningSeconds + walkingSeconds) +
+      coolDownSeconds;
+
+  final steps = <WorkoutStepModel>[
+    WorkoutStepModel(
+      title: 'Aquecimento',
+      instruction:
+          'Caminhe devagar antes de iniciar os intervalos.',
+      durationSeconds: warmUpSeconds,
+    ),
+  ];
+
+  for (
+    var repetition = 1;
+    repetition <= repetitions;
+    repetition++
+  ) {
+    steps.add(
+      WorkoutStepModel(
+        title: 'Trote $repetition/$repetitions',
+        instruction:
+            'Trote devagar. Não tente correr em velocidade máxima.',
+        durationSeconds: runningSeconds,
+      ),
+    );
+
+    steps.add(
+      WorkoutStepModel(
+        title: 'Recuperação $repetition/$repetitions',
+        instruction:
+            'Caminhe e recupere a respiração.',
+        durationSeconds: walkingSeconds,
+      ),
+    );
+  }
+
+  steps.add(
+    WorkoutStepModel(
+      title: 'Desaceleração',
+      instruction:
+          'Caminhe devagar para finalizar o treino.',
+      durationSeconds: coolDownSeconds,
+    ),
+  );
+
+  final description =
+      '${warmUpSeconds ~/ 60} min caminhando, '
+      '$repetitions repetições de '
+      '${_intervalLabel(runningSeconds)} trotando e '
+      '${_intervalLabel(walkingSeconds)} caminhando.'
+      '${additionalInstruction == null ? '' : ' $additionalInstruction'}';
+
+  return WorkoutModel(
+    title: title,
+    duration: _durationLabel(totalSeconds),
+    description: description,
+    steps: steps,
+  );
+}
+
+final List<TrainingWeekModel> walkingTrainingWeeks = [
   TrainingWeekModel(
     number: 1,
     workouts: [
-      WorkoutModel(
+      _steadyWalkingWorkout(
         title: 'Treino 1',
-        duration: '30 minutos',
-        description:
-            '5 min leves, 20 min de caminhada e 5 min leves.',
+        warmUpMinutes: 5,
+        walkingMinutes: 20,
+        coolDownMinutes: 5,
       ),
-      WorkoutModel(
+      _steadyWalkingWorkout(
         title: 'Treino 2',
-        duration: '35 minutos',
-        description:
-            '5 min leves, 25 min de caminhada e 5 min leves.',
+        warmUpMinutes: 5,
+        walkingMinutes: 25,
+        coolDownMinutes: 5,
       ),
-      WorkoutModel(
+      _steadyWalkingWorkout(
         title: 'Treino 3',
-        duration: '40 minutos',
-        description:
-            '5 min leves, 30 min de caminhada e 5 min leves.',
+        warmUpMinutes: 5,
+        walkingMinutes: 30,
+        coolDownMinutes: 5,
       ),
     ],
   ),
   TrainingWeekModel(
     number: 2,
     workouts: [
-      WorkoutModel(
+      _steadyWalkingWorkout(
         title: 'Treino 1',
-        duration: '35 minutos',
-        description:
-            '5 min leves, 25 min em ritmo confortável e 5 min leves.',
+        warmUpMinutes: 5,
+        walkingMinutes: 25,
+        coolDownMinutes: 5,
       ),
-      WorkoutModel(
+      _steadyWalkingWorkout(
         title: 'Treino 2',
-        duration: '40 minutos',
-        description:
-            '5 min leves, 30 min de caminhada e 5 min leves.',
+        warmUpMinutes: 5,
+        walkingMinutes: 30,
+        coolDownMinutes: 5,
       ),
-      WorkoutModel(
+      _steadyWalkingWorkout(
         title: 'Treino 3',
-        duration: '45 minutos',
-        description:
-            '5 min leves, 35 min de caminhada e 5 min leves.',
+        warmUpMinutes: 5,
+        walkingMinutes: 35,
+        coolDownMinutes: 5,
       ),
     ],
   ),
   TrainingWeekModel(
     number: 3,
     workouts: [
-      WorkoutModel(
+      _steadyWalkingWorkout(
         title: 'Treino 1',
-        duration: '40 minutos',
-        description:
-            '5 min leves, 30 min em ritmo confortável e 5 min leves.',
+        warmUpMinutes: 5,
+        walkingMinutes: 30,
+        coolDownMinutes: 5,
       ),
-      WorkoutModel(
+      _alternatingWalkingWorkout(
         title: 'Treino 2',
-        duration: '45 minutos',
-        description:
-            'Alterne 5 min confortáveis com 2 min em ritmo mais rápido.',
+        warmUpMinutes: 5,
+        repetitions: 5,
+        comfortableMinutes: 5,
+        fasterMinutes: 2,
+        coolDownMinutes: 5,
       ),
-      WorkoutModel(
+      _steadyWalkingWorkout(
         title: 'Treino 3',
-        duration: '50 minutos',
-        description:
-            '5 min leves, 40 min de caminhada e 5 min leves.',
+        warmUpMinutes: 5,
+        walkingMinutes: 40,
+        coolDownMinutes: 5,
       ),
     ],
   ),
   TrainingWeekModel(
     number: 4,
     workouts: [
-      WorkoutModel(
+      _steadyWalkingWorkout(
         title: 'Treino 1',
-        duration: '45 minutos',
-        description:
-            '5 min leves, 35 min em ritmo confortável e 5 min leves.',
+        warmUpMinutes: 5,
+        walkingMinutes: 35,
+        coolDownMinutes: 5,
       ),
-      WorkoutModel(
+      _alternatingWalkingWorkout(
         title: 'Treino 2',
-        duration: '50 minutos',
-        description:
-            'Alterne 6 min confortáveis com 2 min em ritmo mais rápido.',
+        warmUpMinutes: 5,
+        repetitions: 5,
+        comfortableMinutes: 6,
+        fasterMinutes: 2,
+        coolDownMinutes: 5,
       ),
-      WorkoutModel(
+      _steadyWalkingWorkout(
         title: 'Treino 3',
-        duration: '55 minutos',
-        description:
-            '5 min leves, 45 min de caminhada e 5 min leves.',
+        warmUpMinutes: 5,
+        walkingMinutes: 45,
+        coolDownMinutes: 5,
       ),
     ],
   ),
 ];
 
-const List<TrainingWeekModel> couchTo5KTrainingWeeks = [
+final List<TrainingWeekModel> couchTo5KTrainingWeeks = [
   TrainingWeekModel(
     number: 1,
     workouts: [
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 1',
-        duration: '29 minutos',
-        description:
-            '5 min caminhando, 6 repetições de 1 min trotando e 2 min caminhando, finalizando com 6 min leves.',
+        warmUpSeconds: 300,
+        repetitions: 6,
+        runningSeconds: 60,
+        walkingSeconds: 120,
+        coolDownSeconds: 360,
       ),
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 2',
-        duration: '29 minutos',
-        description:
-            'Repita o Treino 1 em ritmo confortável, sem correr em velocidade máxima.',
+        warmUpSeconds: 300,
+        repetitions: 6,
+        runningSeconds: 60,
+        walkingSeconds: 120,
+        coolDownSeconds: 360,
+        additionalInstruction:
+            'Mantenha um trote confortável.',
       ),
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 3',
-        duration: '32 minutos',
-        description:
-            '5 min caminhando, 7 repetições de 1 min trotando e 2 min caminhando, finalizando com 6 min leves.',
+        warmUpSeconds: 300,
+        repetitions: 7,
+        runningSeconds: 60,
+        walkingSeconds: 120,
+        coolDownSeconds: 360,
       ),
     ],
   ),
   TrainingWeekModel(
     number: 2,
     workouts: [
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 1',
-        duration: '31 minutos',
-        description:
-            '5 min caminhando, 6 repetições de 1 min e 30 s trotando e 2 min caminhando, finalizando com 5 min leves.',
+        warmUpSeconds: 300,
+        repetitions: 6,
+        runningSeconds: 90,
+        walkingSeconds: 120,
+        coolDownSeconds: 300,
       ),
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 2',
-        duration: '31 minutos',
-        description:
-            'Repita os intervalos em ritmo leve, mantendo a respiração controlada.',
+        warmUpSeconds: 300,
+        repetitions: 6,
+        runningSeconds: 90,
+        walkingSeconds: 120,
+        coolDownSeconds: 300,
+        additionalInstruction:
+            'Mantenha a respiração controlada.',
       ),
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 3',
-        duration: '35 minutos',
-        description:
-            '5 min caminhando, 7 repetições de 1 min e 30 s trotando e 2 min caminhando, finalizando leve.',
+        warmUpSeconds: 300,
+        repetitions: 7,
+        runningSeconds: 90,
+        walkingSeconds: 120,
+        coolDownSeconds: 330,
       ),
     ],
   ),
   TrainingWeekModel(
     number: 3,
     workouts: [
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 1',
-        duration: '34 minutos',
-        description:
-            '5 min caminhando, 6 repetições de 2 min trotando e 2 min caminhando, finalizando com 5 min leves.',
+        warmUpSeconds: 300,
+        repetitions: 6,
+        runningSeconds: 120,
+        walkingSeconds: 120,
+        coolDownSeconds: 300,
       ),
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 2',
-        duration: '34 minutos',
-        description:
-            'Repita o treino mantendo um trote confortável e constante.',
+        warmUpSeconds: 300,
+        repetitions: 6,
+        runningSeconds: 120,
+        walkingSeconds: 120,
+        coolDownSeconds: 300,
+        additionalInstruction:
+            'Priorize um trote leve e constante.',
       ),
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 3',
-        duration: '38 minutos',
-        description:
-            '5 min caminhando, 7 repetições de 2 min trotando e 2 min caminhando, finalizando leve.',
+        warmUpSeconds: 300,
+        repetitions: 7,
+        runningSeconds: 120,
+        walkingSeconds: 120,
+        coolDownSeconds: 300,
       ),
     ],
   ),
   TrainingWeekModel(
     number: 4,
     workouts: [
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 1',
-        duration: '35 minutos',
-        description:
-            '5 min caminhando, 5 repetições de 3 min trotando e 2 min caminhando, finalizando com 5 min leves.',
+        warmUpSeconds: 300,
+        repetitions: 5,
+        runningSeconds: 180,
+        walkingSeconds: 120,
+        coolDownSeconds: 300,
       ),
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 2',
-        duration: '35 minutos',
-        description:
-            'Repita os intervalos sem buscar velocidade. Priorize completar o tempo.',
+        warmUpSeconds: 300,
+        repetitions: 5,
+        runningSeconds: 180,
+        walkingSeconds: 120,
+        coolDownSeconds: 300,
+        additionalInstruction:
+            'Não busque velocidade. Priorize completar o tempo.',
       ),
-      WorkoutModel(
+      _runWalkWorkout(
         title: 'Treino 3',
-        duration: '40 minutos',
-        description:
-            '5 min caminhando, 6 repetições de 3 min trotando e 2 min caminhando, finalizando com 5 min leves.',
+        warmUpSeconds: 300,
+        repetitions: 6,
+        runningSeconds: 180,
+        walkingSeconds: 120,
+        coolDownSeconds: 300,
       ),
     ],
   ),

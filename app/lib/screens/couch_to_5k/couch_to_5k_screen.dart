@@ -8,7 +8,7 @@ class CouchTo5KScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const TrainingPlanScreen(
+    return TrainingPlanScreen(
       planId: 'couch_to_5k',
       title: 'Da Caminhada à Corrida 5 km',
       weeks: couchTo5KTrainingWeeks,

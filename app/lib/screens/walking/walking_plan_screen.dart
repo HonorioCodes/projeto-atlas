@@ -8,7 +8,7 @@ class WalkingPlanScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const TrainingPlanScreen(
+    return TrainingPlanScreen(
       planId: 'walking',
       title: 'Caminhada para Iniciantes',
       weeks: walkingTrainingWeeks,

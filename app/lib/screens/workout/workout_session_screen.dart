@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../models/workout_model.dart';
+import '../../models/workout_step_model.dart';
 
 class WorkoutSessionScreen extends StatefulWidget {
   final WorkoutModel workout;
@@ -22,28 +23,59 @@ class _WorkoutSessionScreenState
     extends State<WorkoutSessionScreen> {
   Timer? _timer;
 
+  late final List<WorkoutStepModel> _steps;
   late final int _totalSeconds;
-  late int _remainingSeconds;
+
+  int _currentStepIndex = 0;
+  int _elapsedSeconds = 0;
+  late int _remainingStepSeconds;
 
   bool _isRunning = false;
   bool _hasStarted = false;
   bool _completionDialogOpen = false;
 
+  WorkoutStepModel get _currentStep {
+    return _steps[_currentStepIndex];
+  }
+
   @override
   void initState() {
     super.initState();
 
+    _steps = widget.workout.steps.isEmpty
+        ? [
+            WorkoutStepModel(
+              title: 'Treino',
+              instruction:
+                  widget.workout.description,
+              durationSeconds:
+                  _readFallbackDuration(),
+            ),
+          ]
+        : widget.workout.steps;
+
+    _totalSeconds = _steps.fold<int>(
+      0,
+      (total, step) {
+        return total + step.durationSeconds;
+      },
+    );
+
+    _remainingStepSeconds =
+        _currentStep.durationSeconds;
+  }
+
+  int _readFallbackDuration() {
     final durationMatch = RegExp(
       r'\d+',
     ).firstMatch(widget.workout.duration);
 
-    final durationMinutes = int.tryParse(
+    final minutes = int.tryParse(
           durationMatch?.group(0) ?? '',
         ) ??
         1;
 
-    _totalSeconds = durationMinutes * 60;
-    _remainingSeconds = _totalSeconds;
+    return minutes * 60;
   }
 
   @override
@@ -52,25 +84,31 @@ class _WorkoutSessionScreenState
     super.dispose();
   }
 
-  double get _progress {
+  double get _overallProgress {
     if (_totalSeconds == 0) {
       return 0;
     }
 
-    return (_totalSeconds - _remainingSeconds) /
-        _totalSeconds;
+    return _elapsedSeconds / _totalSeconds;
   }
 
-  String get _formattedTime {
-    final hours = _remainingSeconds ~/ 3600;
+  double get _stepProgress {
+    if (_currentStep.durationSeconds == 0) {
+      return 0;
+    }
+
+    return (_currentStep.durationSeconds -
+            _remainingStepSeconds) /
+        _currentStep.durationSeconds;
+  }
+
+  String _formatTime(int totalSeconds) {
+    final hours = totalSeconds ~/ 3600;
 
     final minutes =
-        (_remainingSeconds % 3600) ~/ 60;
+        (totalSeconds % 3600) ~/ 60;
 
-    final seconds = _remainingSeconds % 60;
-
-    final hoursText =
-        hours.toString().padLeft(2, '0');
+    final seconds = totalSeconds % 60;
 
     final minutesText =
         minutes.toString().padLeft(2, '0');
@@ -78,11 +116,18 @@ class _WorkoutSessionScreenState
     final secondsText =
         seconds.toString().padLeft(2, '0');
 
+    if (hours == 0) {
+      return '$minutesText:$secondsText';
+    }
+
+    final hoursText =
+        hours.toString().padLeft(2, '0');
+
     return '$hoursText:$minutesText:$secondsText';
   }
 
   String get _statusText {
-    if (_remainingSeconds == 0) {
+    if (_elapsedSeconds >= _totalSeconds) {
       return 'Treino concluído';
     }
 
@@ -109,29 +154,46 @@ class _WorkoutSessionScreenState
 
     _timer = Timer.periodic(
       const Duration(seconds: 1),
-      (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
-
-        if (_remainingSeconds <= 1) {
-          timer.cancel();
-
-          setState(() {
-            _remainingSeconds = 0;
-            _isRunning = false;
-          });
-
-          _showCompletionDialog();
-          return;
-        }
-
-        setState(() {
-          _remainingSeconds--;
-        });
-      },
+      _handleTimerTick,
     );
+  }
+
+  void _handleTimerTick(Timer timer) {
+    if (!mounted) {
+      timer.cancel();
+      return;
+    }
+
+    if (_remainingStepSeconds > 1) {
+      setState(() {
+        _remainingStepSeconds--;
+        _elapsedSeconds++;
+      });
+
+      return;
+    }
+
+    if (_currentStepIndex <
+        _steps.length - 1) {
+      setState(() {
+        _elapsedSeconds++;
+        _currentStepIndex++;
+        _remainingStepSeconds =
+            _currentStep.durationSeconds;
+      });
+
+      return;
+    }
+
+    timer.cancel();
+
+    setState(() {
+      _elapsedSeconds = _totalSeconds;
+      _remainingStepSeconds = 0;
+      _isRunning = false;
+    });
+
+    _showCompletionDialog();
   }
 
   void _pauseWorkout() {
@@ -146,7 +208,10 @@ class _WorkoutSessionScreenState
     _timer?.cancel();
 
     setState(() {
-      _remainingSeconds = _totalSeconds;
+      _currentStepIndex = 0;
+      _elapsedSeconds = 0;
+      _remainingStepSeconds =
+          _steps.first.durationSeconds;
       _isRunning = false;
       _hasStarted = false;
     });
@@ -168,7 +233,7 @@ class _WorkoutSessionScreenState
             'Treino concluído',
           ),
           content: const Text(
-            'Parabéns! Você completou o treino.',
+            'Parabéns! Você completou todas as etapas.',
           ),
           actions: [
             ElevatedButton(
@@ -205,7 +270,7 @@ class _WorkoutSessionScreenState
             'Concluir treino?',
           ),
           content: const Text(
-            'O treino será marcado como concluído.',
+            'O treino será marcado como concluído mesmo que ainda existam etapas pendentes.',
           ),
           actions: [
             TextButton(
@@ -240,6 +305,9 @@ class _WorkoutSessionScreenState
 
   @override
   Widget build(BuildContext context) {
+    final remainingTotalSeconds =
+        _totalSeconds - _elapsedSeconds;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -249,18 +317,6 @@ class _WorkoutSessionScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                widget.workout.description,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyLarge,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
           Text(
             _statusText,
             textAlign: TextAlign.center,
@@ -269,6 +325,33 @@ class _WorkoutSessionScreenState
                 .titleMedium,
           ),
           const SizedBox(height: 20),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Text(
+                    'Etapa ${_currentStepIndex + 1} '
+                    'de ${_steps.length}',
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _currentStep.title,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _currentStep.instruction,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
           Center(
             child: SizedBox(
               width: 230,
@@ -280,21 +363,45 @@ class _WorkoutSessionScreenState
                     width: 230,
                     height: 230,
                     child: CircularProgressIndicator(
-                      value: _progress,
+                      value: _stepProgress,
                       strokeWidth: 12,
                     ),
                   ),
-                  Text(
-                    _formattedTime,
-                    style: Theme.of(context)
-                        .textTheme
-                        .displaySmall,
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Tempo da etapa',
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _formatTime(
+                          _remainingStepSeconds,
+                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .displaySmall,
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
+          Text(
+            'Tempo restante do treino: '
+            '${_formatTime(remainingTotalSeconds)}',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: _overallProgress,
+            minHeight: 8,
+            borderRadius:
+                BorderRadius.circular(8),
+          ),
+          const SizedBox(height: 28),
           Row(
             children: [
               Expanded(
