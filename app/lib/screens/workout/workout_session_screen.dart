@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../models/workout_model.dart';
 import '../../models/workout_step_model.dart';
+import '../../services/location_service.dart';
 import '../../services/workout_feedback_service.dart';
+import '../../services/workout_location_tracker.dart';
 import 'workout_result_screen.dart';
 
 class WorkoutSessionScreen extends StatefulWidget {
@@ -30,12 +32,17 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   late int _remainingStepSeconds;
 
   bool _isRunning = false;
+  bool _isStartingWorkout = false;
   bool _hasStarted = false;
   bool _completionFeedbackEmitted = false;
   bool _resultScreenOpen = false;
   bool _allowExit = false;
 
+  WorkoutLocationSnapshot _locationSnapshot = WorkoutLocationSnapshot.initial;
+
   final WorkoutFeedbackService _feedbackService = WorkoutFeedbackService();
+
+  final WorkoutLocationTracker _locationTracker = WorkoutLocationTracker();
 
   WorkoutStepModel get _currentStep {
     return _steps[_currentStepIndex];
@@ -80,6 +87,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   void dispose() {
     _timer?.cancel();
 
+    unawaited(_locationTracker.dispose());
+
     unawaited(_feedbackService.dispose());
 
     super.dispose();
@@ -119,9 +128,21 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     return '$hoursText:$minutesText:$secondsText';
   }
 
+  String _formatDistance(double meters) {
+    if (meters < 1000) {
+      return '${meters.round()} m';
+    }
+
+    return '${(meters / 1000).toStringAsFixed(2)} km';
+  }
+
   String get _statusText {
     if (_elapsedSeconds >= _totalSeconds) {
       return 'Treino concluído';
+    }
+
+    if (_isStartingWorkout) {
+      return 'Preparando GPS';
     }
 
     if (_isRunning) {
@@ -135,17 +156,180 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     return 'Pronto para começar';
   }
 
-  void _startOrResumeWorkout() {
-    if (_isRunning) {
+  String get _gpsStatusText {
+    switch (_locationSnapshot.status) {
+      case WorkoutGpsStatus.idle:
+        return 'Aguardando';
+
+      case WorkoutGpsStatus.searching:
+        return 'Buscando sinal';
+
+      case WorkoutGpsStatus.tracking:
+        return 'GPS ativo';
+
+      case WorkoutGpsStatus.poorSignal:
+        return 'Sinal fraco';
+
+      case WorkoutGpsStatus.paused:
+        return 'Pausado';
+
+      case WorkoutGpsStatus.unavailable:
+        return 'Indisponível';
+
+      case WorkoutGpsStatus.error:
+        return 'Erro no GPS';
+    }
+  }
+
+  String get _accuracyText {
+    final accuracy = _locationSnapshot.accuracyMeters;
+
+    if (accuracy == null) {
+      return '--';
+    }
+
+    return '${accuracy.toStringAsFixed(0)} m';
+  }
+
+  void _handleLocationUpdate(WorkoutLocationSnapshot snapshot) {
+    if (!mounted) {
       return;
     }
 
     setState(() {
-      _isRunning = true;
-      _hasStarted = true;
+      _locationSnapshot = snapshot;
+    });
+  }
+
+  Future<void> _startOrResumeWorkout() async {
+    if (_isRunning || _isStartingWorkout) {
+      return;
+    }
+
+    setState(() {
+      _isStartingWorkout = true;
     });
 
-    _timer = Timer.periodic(const Duration(seconds: 1), _handleTimerTick);
+    try {
+      final access = await _locationTracker.start(
+        onUpdate: _handleLocationUpdate,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (!access.isGranted) {
+        setState(() {
+          _isStartingWorkout = false;
+        });
+
+        await _showLocationAccessDialog(access.status);
+
+        return;
+      }
+
+      setState(() {
+        _isRunning = true;
+        _isStartingWorkout = false;
+        _hasStarted = true;
+      });
+
+      _timer = Timer.periodic(const Duration(seconds: 1), _handleTimerTick);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isStartingWorkout = false;
+      });
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Não foi possível iniciar o GPS'),
+            content: const Text(
+              'Verifique a localização do celular '
+              'e tente iniciar novamente.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                },
+                child: const Text('Entendi'),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
+  Future<void> _showLocationAccessDialog(LocationAccessStatus status) async {
+    late final String title;
+    late final String message;
+    late final String actionLabel;
+    late final bool opensSettings;
+
+    switch (status) {
+      case LocationAccessStatus.serviceDisabled:
+        title = 'GPS desativado';
+        message = 'Ative a localização do celular para iniciar o treino.';
+        actionLabel = 'Ativar GPS';
+        opensSettings = true;
+
+      case LocationAccessStatus.permissionDenied:
+        title = 'Permissão necessária';
+        message = 'Permita o acesso à localização e tente iniciar novamente.';
+        actionLabel = 'Entendi';
+        opensSettings = false;
+
+      case LocationAccessStatus.permissionDeniedForever:
+        title = 'Permissão bloqueada';
+        message = 'Abra as configurações do aplicativo e libere a localização.';
+        actionLabel = 'Abrir configurações';
+        opensSettings = true;
+
+      case LocationAccessStatus.granted:
+        return;
+    }
+
+    final openSettings = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(opensSettings);
+              },
+              child: Text(actionLabel),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (openSettings != true) {
+      return;
+    }
+
+    if (status == LocationAccessStatus.serviceDisabled) {
+      await _locationTracker.openLocationSettings();
+    } else {
+      await _locationTracker.openAppSettings();
+    }
   }
 
   void _handleTimerTick(Timer timer) {
@@ -187,6 +371,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   }
 
   Future<void> _completeWorkoutAutomatically() async {
+    await _locationTracker.stop();
     await _emitWorkoutCompletedFeedback();
 
     if (!mounted) {
@@ -199,6 +384,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   void _pauseWorkout() {
     _timer?.cancel();
 
+    unawaited(_locationTracker.pause());
+
     setState(() {
       _isRunning = false;
     });
@@ -207,14 +394,18 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   void _resetWorkout() {
     _timer?.cancel();
 
+    unawaited(_locationTracker.reset());
+
     setState(() {
       _currentStepIndex = 0;
       _elapsedSeconds = 0;
       _remainingStepSeconds = _steps.first.durationSeconds;
       _isRunning = false;
+      _isStartingWorkout = false;
       _hasStarted = false;
       _completionFeedbackEmitted = false;
       _allowExit = false;
+      _locationSnapshot = WorkoutLocationSnapshot.initial;
     });
 
     _feedbackService.resetCompletionFeedback();
@@ -232,6 +423,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
   void _exitScreen({required bool completed}) {
     _timer?.cancel();
+
+    unawaited(_locationTracker.stop());
 
     if (!mounted) {
       return;
@@ -260,6 +453,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     final wasRunning = _isRunning;
 
     _timer?.cancel();
+    await _locationTracker.pause();
 
     if (_isRunning) {
       setState(() {
@@ -314,7 +508,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
 
     if (wasRunning) {
-      _startOrResumeWorkout();
+      await _startOrResumeWorkout();
     }
   }
 
@@ -353,6 +547,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     final wasRunning = _isRunning;
 
     _timer?.cancel();
+    await _locationTracker.pause();
 
     if (_isRunning) {
       setState(() {
@@ -393,6 +588,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
 
     if (confirmed == true) {
+      await _locationTracker.stop();
       await _emitWorkoutCompletedFeedback();
 
       if (!mounted) {
@@ -405,8 +601,53 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
 
     if (wasRunning) {
-      _startOrResumeWorkout();
+      await _startOrResumeWorkout();
     }
+  }
+
+  Widget _buildGpsCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.gps_fixed),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Monitoramento por GPS',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Text(_gpsStatusText),
+              ],
+            ),
+            const Divider(height: 28),
+            Row(
+              children: [
+                Expanded(
+                  child: _MetricItem(
+                    label: 'Distância',
+                    value: _formatDistance(_locationSnapshot.distanceMeters),
+                  ),
+                ),
+                Expanded(
+                  child: _MetricItem(label: 'Precisão', value: _accuracyText),
+                ),
+                Expanded(
+                  child: _MetricItem(
+                    label: 'Pontos',
+                    value: _locationSnapshot.validPointCount.toString(),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -497,17 +738,31 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               minHeight: 8,
               borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 20),
+            _buildGpsCard(),
+            const SizedBox(height: 24),
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _isRunning
                         ? _pauseWorkout
-                        : _startOrResumeWorkout,
-                    icon: Icon(_isRunning ? Icons.pause : Icons.play_arrow),
+                        : _isStartingWorkout
+                        ? null
+                        : () {
+                            unawaited(_startOrResumeWorkout());
+                          },
+                    icon: _isStartingWorkout
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(_isRunning ? Icons.pause : Icons.play_arrow),
                     label: Text(
-                      _isRunning
+                      _isStartingWorkout
+                          ? 'Preparando...'
+                          : _isRunning
                           ? 'Pausar'
                           : _hasStarted
                           ? 'Continuar'
@@ -534,6 +789,32 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MetricItem extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _MetricItem({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
     );
   }
 }

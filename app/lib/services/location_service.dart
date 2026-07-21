@@ -71,6 +71,24 @@ class LocationService {
     return Geolocator.getCurrentPosition(locationSettings: settings);
   }
 
+  Stream<Position> getPositionStream() {
+    final settings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 5,
+    );
+
+    return Geolocator.getPositionStream(locationSettings: settings);
+  }
+
+  double calculateDistance({required Position start, required Position end}) {
+    return Geolocator.distanceBetween(
+      start.latitude,
+      start.longitude,
+      end.latitude,
+      end.longitude,
+    );
+  }
+
   Future<bool> openAppSettings() {
     return Geolocator.openAppSettings();
   }
