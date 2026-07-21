@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
-class WorkoutResultScreen extends StatelessWidget {
+import '../../models/workout_session_record.dart';
+import '../../services/workout_history_service.dart';
+
+class WorkoutResultScreen extends StatefulWidget {
   final String workoutTitle;
   final int elapsedSeconds;
   final int plannedSeconds;
@@ -14,12 +17,24 @@ class WorkoutResultScreen extends StatelessWidget {
     required this.completedManually,
   });
 
+  @override
+  State<WorkoutResultScreen> createState() {
+    return _WorkoutResultScreenState();
+  }
+}
+
+class _WorkoutResultScreenState extends State<WorkoutResultScreen> {
+  final WorkoutHistoryService _historyService = WorkoutHistoryService();
+
+  bool _isSaving = false;
+  String? _saveError;
+
   double get _progress {
-    if (plannedSeconds <= 0) {
+    if (widget.plannedSeconds <= 0) {
       return 0;
     }
 
-    final value = elapsedSeconds / plannedSeconds;
+    final value = widget.elapsedSeconds / widget.plannedSeconds;
 
     return value.clamp(0.0, 1.0).toDouble();
   }
@@ -41,6 +56,47 @@ class WorkoutResultScreen extends StatelessWidget {
     final hoursText = hours.toString().padLeft(2, '0');
 
     return '$hoursText:$minutesText:$secondsText';
+  }
+
+  Future<void> _saveAndFinish() async {
+    if (_isSaving) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _saveError = null;
+    });
+
+    final completedAt = DateTime.now();
+
+    final record = WorkoutSessionRecord(
+      id: completedAt.microsecondsSinceEpoch.toString(),
+      workoutTitle: widget.workoutTitle,
+      completedAt: completedAt,
+      elapsedSeconds: widget.elapsedSeconds,
+      plannedSeconds: widget.plannedSeconds,
+      completedManually: widget.completedManually,
+    );
+
+    try {
+      await _historyService.saveRecord(record);
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop(true);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSaving = false;
+        _saveError = 'Não foi possível salvar o treino. Tente novamente.';
+      });
+    }
   }
 
   @override
@@ -71,7 +127,7 @@ class WorkoutResultScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                workoutTitle,
+                widget.workoutTitle,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
@@ -83,17 +139,17 @@ class WorkoutResultScreen extends StatelessWidget {
                     children: [
                       _ResultRow(
                         label: 'Tempo realizado',
-                        value: _formatTime(elapsedSeconds),
+                        value: _formatTime(widget.elapsedSeconds),
                       ),
                       const Divider(height: 28),
                       _ResultRow(
                         label: 'Duração planejada',
-                        value: _formatTime(plannedSeconds),
+                        value: _formatTime(widget.plannedSeconds),
                       ),
                       const Divider(height: 28),
                       _ResultRow(
                         label: 'Tipo de conclusão',
-                        value: completedManually
+                        value: widget.completedManually
                             ? 'Conclusão manual'
                             : 'Conclusão automática',
                       ),
@@ -113,13 +169,25 @@ class WorkoutResultScreen extends StatelessWidget {
                 minHeight: 10,
                 borderRadius: BorderRadius.circular(10),
               ),
+              if (_saveError != null) ...[
+                const SizedBox(height: 20),
+                Text(
+                  _saveError!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
               const SizedBox(height: 32),
               ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pop(true);
-                },
-                icon: const Icon(Icons.save_outlined),
-                label: const Text('Finalizar e salvar'),
+                onPressed: _isSaving ? null : _saveAndFinish,
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(_isSaving ? 'Salvando...' : 'Finalizar e salvar'),
               ),
             ],
           ),
