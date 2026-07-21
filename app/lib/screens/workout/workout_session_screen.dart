@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/workout_model.dart';
 import '../../models/workout_step_model.dart';
 import '../../services/workout_feedback_service.dart';
+import 'workout_result_screen.dart';
 
 class WorkoutSessionScreen extends StatefulWidget {
   final WorkoutModel workout;
@@ -30,8 +31,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
   bool _isRunning = false;
   bool _hasStarted = false;
-  bool _completionDialogOpen = false;
   bool _completionFeedbackEmitted = false;
+  bool _resultScreenOpen = false;
   bool _allowExit = false;
 
   final WorkoutFeedbackService _feedbackService = WorkoutFeedbackService();
@@ -103,13 +104,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
   String _formatTime(int totalSeconds) {
     final hours = totalSeconds ~/ 3600;
-
     final minutes = (totalSeconds % 3600) ~/ 60;
-
     final seconds = totalSeconds % 60;
 
     final minutesText = minutes.toString().padLeft(2, '0');
-
     final secondsText = seconds.toString().padLeft(2, '0');
 
     if (hours == 0) {
@@ -185,9 +183,17 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       _isRunning = false;
     });
 
-    unawaited(_emitWorkoutCompletedFeedback());
+    unawaited(_completeWorkoutAutomatically());
+  }
 
-    unawaited(_showCompletionDialog());
+  Future<void> _completeWorkoutAutomatically() async {
+    await _emitWorkoutCompletedFeedback();
+
+    if (!mounted) {
+      return;
+    }
+
+    await _openResultScreen(completedManually: false);
   }
 
   void _pauseWorkout() {
@@ -312,35 +318,35 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
   }
 
-  Future<void> _showCompletionDialog() async {
-    if (_completionDialogOpen || !mounted) {
+  Future<void> _openResultScreen({required bool completedManually}) async {
+    if (_resultScreenOpen || !mounted) {
       return;
     }
 
-    _completionDialogOpen = true;
+    _resultScreenOpen = true;
 
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Treino concluído'),
-          content: const Text('Parabéns! Você completou todas as etapas.'),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-
-                _exitScreen(completed: true);
-              },
-              child: const Text('Finalizar'),
-            ),
-          ],
-        );
-      },
+    final shouldSave = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) {
+          return WorkoutResultScreen(
+            workoutTitle: widget.workout.title,
+            elapsedSeconds: _elapsedSeconds,
+            plannedSeconds: _totalSeconds,
+            completedManually: completedManually,
+          );
+        },
+      ),
     );
 
-    _completionDialogOpen = false;
+    _resultScreenOpen = false;
+
+    if (!mounted) {
+      return;
+    }
+
+    if (shouldSave == true) {
+      _exitScreen(completed: true);
+    }
   }
 
   Future<void> _finishWorkoutManually() async {
@@ -393,7 +399,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         return;
       }
 
-      _exitScreen(completed: true);
+      await _openResultScreen(completedManually: true);
 
       return;
     }
