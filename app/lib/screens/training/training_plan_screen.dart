@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../history/workout_history_screen.dart';
 import '../../models/training_week_model.dart';
 import '../../models/workout_model.dart';
 import '../../services/plan_storage_service.dart';
@@ -25,28 +26,21 @@ class TrainingPlanScreen extends StatefulWidget {
   }
 }
 
-class _TrainingPlanScreenState
-    extends State<TrainingPlanScreen> {
-  final WorkoutProgressService _progressService =
-      WorkoutProgressService();
+class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
+  final WorkoutProgressService _progressService = WorkoutProgressService();
 
   late List<bool> _completedWorkouts;
 
   bool _isLoading = true;
 
   int get _workoutCount {
-    return widget.weeks.fold<int>(
-      0,
-      (total, week) {
-        return total + week.workouts.length;
-      },
-    );
+    return widget.weeks.fold<int>(0, (total, week) {
+      return total + week.workouts.length;
+    });
   }
 
   int get _completedCount {
-    return _completedWorkouts
-        .where((workout) => workout)
-        .length;
+    return _completedWorkouts.where((workout) => workout).length;
   }
 
   double get _progress {
@@ -58,16 +52,10 @@ class _TrainingPlanScreenState
   }
 
   int get _currentWeekIndex {
-    for (
-      var weekIndex = 0;
-      weekIndex < widget.weeks.length;
-      weekIndex++
-    ) {
-      final isUnlocked =
-          _isWeekUnlocked(weekIndex);
+    for (var weekIndex = 0; weekIndex < widget.weeks.length; weekIndex++) {
+      final isUnlocked = _isWeekUnlocked(weekIndex);
 
-      final isCompleted =
-          _isWeekCompleted(weekIndex);
+      final isCompleted = _isWeekCompleted(weekIndex);
 
       if (isUnlocked && !isCompleted) {
         return weekIndex;
@@ -81,17 +69,13 @@ class _TrainingPlanScreenState
   void initState() {
     super.initState();
 
-    _completedWorkouts = List<bool>.filled(
-      _workoutCount,
-      false,
-    );
+    _completedWorkouts = List<bool>.filled(_workoutCount, false);
 
     _loadProgress();
   }
 
   Future<void> _loadProgress() async {
-    final progress =
-        await _progressService.loadProgress(
+    final progress = await _progressService.loadProgress(
       widget.planId,
       _workoutCount,
     );
@@ -106,18 +90,12 @@ class _TrainingPlanScreenState
     });
   }
 
-  Future<void> _updateWorkout(
-    int index,
-    bool isCompleted,
-  ) async {
+  Future<void> _updateWorkout(int index, bool isCompleted) async {
     setState(() {
       _completedWorkouts[index] = isCompleted;
     });
 
-    await _progressService.saveProgress(
-      widget.planId,
-      _completedWorkouts,
-    );
+    await _progressService.saveProgress(widget.planId, _completedWorkouts);
   }
 
   Future<void> _openWorkoutDetails({
@@ -129,14 +107,12 @@ class _TrainingPlanScreenState
       return;
     }
 
-    final newStatus =
-        await Navigator.of(context).push<bool>(
+    final newStatus = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (context) {
           return WorkoutDetailScreen(
             workout: workout,
-            isCompleted:
-                _completedWorkouts[index],
+            isCompleted: _completedWorkouts[index],
           );
         },
       ),
@@ -146,14 +122,20 @@ class _TrainingPlanScreenState
       return;
     }
 
-    if (newStatus ==
-        _completedWorkouts[index]) {
+    if (newStatus == _completedWorkouts[index]) {
       return;
     }
 
-    await _updateWorkout(
-      index,
-      newStatus,
+    await _updateWorkout(index, newStatus);
+  }
+
+  Future<void> _openHistory() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return const WorkoutHistoryScreen();
+        },
+      ),
     );
   }
 
@@ -177,13 +159,8 @@ class _TrainingPlanScreenState
   int _getWeekStartIndex(int weekIndex) {
     var startIndex = 0;
 
-    for (
-      var index = 0;
-      index < weekIndex;
-      index++
-    ) {
-      startIndex +=
-          widget.weeks[index].workouts.length;
+    for (var index = 0; index < weekIndex; index++) {
+      startIndex += widget.weeks[index].workouts.length;
     }
 
     return startIndex;
@@ -194,49 +171,30 @@ class _TrainingPlanScreenState
       return true;
     }
 
-    final previousWeekIndex =
-        weekIndex - 1;
+    final previousWeekIndex = weekIndex - 1;
 
-    final previousWeek =
-        widget.weeks[previousWeekIndex];
+    final previousWeek = widget.weeks[previousWeekIndex];
 
-    final previousWeekStartIndex =
-        _getWeekStartIndex(
-      previousWeekIndex,
-    );
+    final previousWeekStartIndex = _getWeekStartIndex(previousWeekIndex);
 
     final previousWeekEndIndex =
-        previousWeekStartIndex +
-        previousWeek.workouts.length;
+        previousWeekStartIndex + previousWeek.workouts.length;
 
     return _completedWorkouts
-        .sublist(
-          previousWeekStartIndex,
-          previousWeekEndIndex,
-        )
-        .every(
-          (workout) => workout,
-        );
+        .sublist(previousWeekStartIndex, previousWeekEndIndex)
+        .every((workout) => workout);
   }
 
   bool _isWeekCompleted(int weekIndex) {
-    final week =
-        widget.weeks[weekIndex];
+    final week = widget.weeks[weekIndex];
 
-    final startIndex =
-        _getWeekStartIndex(weekIndex);
+    final startIndex = _getWeekStartIndex(weekIndex);
 
-    final endIndex =
-        startIndex + week.workouts.length;
+    final endIndex = startIndex + week.workouts.length;
 
     return _completedWorkouts
-        .sublist(
-          startIndex,
-          endIndex,
-        )
-        .every(
-          (workout) => workout,
-        );
+        .sublist(startIndex, endIndex)
+        .every((workout) => workout);
   }
 
   Widget _buildWorkoutCard({
@@ -247,9 +205,7 @@ class _TrainingPlanScreenState
     return Opacity(
       opacity: isUnlocked ? 1 : 0.55,
       child: Card(
-        margin: const EdgeInsets.only(
-          bottom: 12,
-        ),
+        margin: const EdgeInsets.only(bottom: 12),
         child: ListTile(
           onTap: isUnlocked
               ? () {
@@ -261,15 +217,11 @@ class _TrainingPlanScreenState
                 }
               : null,
           leading: Icon(
-            isUnlocked
-                ? Icons.directions_walk
-                : Icons.lock_outline,
+            isUnlocked ? Icons.directions_walk : Icons.lock_outline,
           ),
           title: Text(workout.title),
           subtitle: Padding(
-            padding: const EdgeInsets.only(
-              top: 6,
-            ),
+            padding: const EdgeInsets.only(top: 6),
             child: Text(
               '${workout.duration}\n'
               '${workout.description}',
@@ -278,13 +230,9 @@ class _TrainingPlanScreenState
           isThreeLine: true,
           trailing: isUnlocked
               ? Checkbox(
-                  value:
-                      _completedWorkouts[index],
+                  value: _completedWorkouts[index],
                   onChanged: (value) {
-                    _updateWorkout(
-                      index,
-                      value ?? false,
-                    );
+                    _updateWorkout(index, value ?? false);
                   },
                 )
               : null,
@@ -293,49 +241,29 @@ class _TrainingPlanScreenState
     );
   }
 
-  List<Widget> _buildWeeks(
-    BuildContext context,
-  ) {
+  List<Widget> _buildWeeks(BuildContext context) {
     final widgets = <Widget>[];
 
     var workoutIndex = 0;
 
-    for (
-      var weekIndex = 0;
-      weekIndex < widget.weeks.length;
-      weekIndex++
-    ) {
-      final week =
-          widget.weeks[weekIndex];
+    for (var weekIndex = 0; weekIndex < widget.weeks.length; weekIndex++) {
+      final week = widget.weeks[weekIndex];
 
-      final isUnlocked =
-          _isWeekUnlocked(weekIndex);
+      final isUnlocked = _isWeekUnlocked(weekIndex);
 
-      final isCompleted =
-          _isWeekCompleted(weekIndex);
+      final isCompleted = _isWeekCompleted(weekIndex);
 
       final isCurrent =
-          isUnlocked &&
-          !isCompleted &&
-          weekIndex == _currentWeekIndex;
+          isUnlocked && !isCompleted && weekIndex == _currentWeekIndex;
 
-      final firstIndex =
-          workoutIndex;
+      final firstIndex = workoutIndex;
 
-      final lastIndex =
-          firstIndex +
-          week.workouts.length;
+      final lastIndex = firstIndex + week.workouts.length;
 
-      final completedInWeek =
-          _completedWorkouts
-              .sublist(
-                firstIndex,
-                lastIndex,
-              )
-              .where(
-                (workout) => workout,
-              )
-              .length;
+      final completedInWeek = _completedWorkouts
+          .sublist(firstIndex, lastIndex)
+          .where((workout) => workout)
+          .length;
 
       widgets.add(
         Row(
@@ -343,42 +271,29 @@ class _TrainingPlanScreenState
             Expanded(
               child: Text(
                 week.title,
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall,
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
             ),
             if (!isUnlocked)
               const Chip(
-                avatar: Icon(
-                  Icons.lock_outline,
-                  size: 18,
-                ),
+                avatar: Icon(Icons.lock_outline, size: 18),
                 label: Text('Bloqueada'),
               )
             else if (isCompleted)
               const Chip(
-                avatar: Icon(
-                  Icons.check_circle_outline,
-                  size: 18,
-                ),
+                avatar: Icon(Icons.check_circle_outline, size: 18),
                 label: Text('Concluída'),
               )
             else if (isCurrent)
               const Chip(
-                avatar: Icon(
-                  Icons.play_circle_outline,
-                  size: 18,
-                ),
+                avatar: Icon(Icons.play_circle_outline, size: 18),
                 label: Text('Atual'),
               ),
           ],
         ),
       );
 
-      widgets.add(
-        const SizedBox(height: 8),
-      );
+      widgets.add(const SizedBox(height: 8));
 
       if (isUnlocked) {
         widgets.add(
@@ -389,16 +304,10 @@ class _TrainingPlanScreenState
           ),
         );
       } else {
-        widgets.add(
-          const Text(
-            'Conclua a semana anterior para liberar.',
-          ),
-        );
+        widgets.add(const Text('Conclua a semana anterior para liberar.'));
       }
 
-      widgets.add(
-        const SizedBox(height: 12),
-      );
+      widgets.add(const SizedBox(height: 12));
 
       for (final workout in week.workouts) {
         widgets.add(
@@ -412,9 +321,7 @@ class _TrainingPlanScreenState
         workoutIndex++;
       }
 
-      widgets.add(
-        const SizedBox(height: 16),
-      );
+      widgets.add(const SizedBox(height: 16));
     }
 
     return widgets;
@@ -424,25 +331,22 @@ class _TrainingPlanScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
+            onPressed: _openHistory,
+            icon: const Icon(Icons.history),
+            tooltip: 'Histórico de treinos',
+          ),
+          IconButton(
             onPressed: _changePlan,
-            icon: const Icon(
-              Icons.swap_horiz,
-            ),
+            icon: const Icon(Icons.swap_horiz),
             tooltip: 'Trocar plano',
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -457,8 +361,7 @@ class _TrainingPlanScreenState
                 LinearProgressIndicator(
                   value: _progress,
                   minHeight: 8,
-                  borderRadius:
-                      BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 const SizedBox(height: 24),
                 ..._buildWeeks(context),
