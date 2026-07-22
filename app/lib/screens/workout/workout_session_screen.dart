@@ -191,7 +191,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
   String get _statusText {
     if (_elapsedSeconds >= _totalSeconds) {
-      return 'Treino concluÃ­do';
+      return 'Treino concluído';
     }
 
     if (_isStartingWorkout) {
@@ -206,7 +206,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       return 'Treino pausado';
     }
 
-    return 'Pronto para comeÃ§ar';
+    return 'Pronto para começar';
   }
 
   String get _gpsStatusText {
@@ -227,7 +227,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         return 'Pausado';
 
       case WorkoutGpsStatus.unavailable:
-        return 'IndisponÃ­vel';
+        return 'Indisponível';
 
       case WorkoutGpsStatus.error:
         return 'Erro no GPS';
@@ -302,9 +302,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
-            title: const Text('NÃ£o foi possÃ­vel iniciar o GPS'),
+            title: const Text('Não foi possível iniciar o GPS'),
             content: const Text(
-              'Verifique a localizaÃ§Ã£o do celular '
+              'Verifique a localização do celular '
               'e tente iniciar novamente.',
             ),
             actions: [
@@ -331,25 +331,25 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       case LocationAccessStatus.serviceDisabled:
         title = 'GPS desativado';
         message =
-            'Ative a localizaÃ§Ã£o do celular '
+            'Ative a localização do celular '
             'para iniciar o treino.';
         actionLabel = 'Ativar GPS';
         opensSettings = true;
 
       case LocationAccessStatus.permissionDenied:
-        title = 'PermissÃ£o necessÃ¡ria';
+        title = 'Permissão necessária';
         message =
-            'Permita o acesso Ã  localizaÃ§Ã£o '
+            'Permita o acesso à localização '
             'e tente iniciar novamente.';
         actionLabel = 'Entendi';
         opensSettings = false;
 
       case LocationAccessStatus.permissionDeniedForever:
-        title = 'PermissÃ£o bloqueada';
+        title = 'Permissão bloqueada';
         message =
-            'Abra as configuraÃ§Ãµes do aplicativo '
-            'e libere a localizaÃ§Ã£o.';
-        actionLabel = 'Abrir configuraÃ§Ãµes';
+            'Abra as configurações do aplicativo '
+            'e libere a localização.';
+        actionLabel = 'Abrir configurações';
         opensSettings = true;
 
       case LocationAccessStatus.granted:
@@ -535,8 +535,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         return AlertDialog(
           title: const Text('Sair do treino?'),
           content: const Text(
-            'Seu progresso nesta execuÃ§Ã£o serÃ¡ perdido. '
-            'O treino nÃ£o serÃ¡ marcado como concluÃ­do.',
+            'Seu progresso nesta execução será perdido. '
+            'O treino não será marcado como concluído.',
           ),
           actions: [
             TextButton(
@@ -630,7 +630,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         return AlertDialog(
           title: const Text('Concluir treino?'),
           content: const Text(
-            'O treino serÃ¡ marcado como concluÃ­do '
+            'O treino será marcado como concluído '
             'mesmo que ainda existam etapas pendentes.',
           ),
           actions: [
@@ -698,13 +698,13 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               children: [
                 Expanded(
                   child: _MetricItem(
-                    label: 'DistÃ¢ncia',
+                    label: 'Distância',
                     value: _formatDistance(_locationSnapshot.distanceMeters),
                   ),
                 ),
                 Expanded(
                   child: _MetricItem(
-                    label: 'Ritmo mÃ©dio',
+                    label: 'Ritmo médio',
                     value: '${_formatAveragePace()} min/km',
                   ),
                 ),
@@ -718,8 +718,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
             ),
             const Divider(height: 28),
             Text(
-              'PrecisÃ£o: $_accuracyText  â€¢  '
-              'Pontos vÃ¡lidos: '
+              'Precisão: $_accuracyText  •  '
+              'Pontos válidos: '
               '${_locationSnapshot.validPointCount}',
               textAlign: TextAlign.center,
             ),

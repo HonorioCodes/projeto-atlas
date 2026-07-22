@@ -39,6 +39,7 @@ class WorkoutLocationTracker {
   static const double _maximumAccuracyMeters = 35;
   static const double _minimumSegmentMeters = 1;
   static const double _maximumSegmentMeters = 100;
+
   static const double _maximumSpeedMetersPerSecond = 12;
 
   final LocationService _locationService;
@@ -63,8 +64,6 @@ class WorkoutLocationTracker {
 
     await _cancelSubscription();
 
-    // Evita calcular distância entre o último ponto
-    // anterior à pausa e o primeiro ponto da retomada.
     _lastAcceptedPosition = null;
 
     final access = await _locationService.checkAccess(requestPermission: true);
@@ -74,14 +73,25 @@ class WorkoutLocationTracker {
       return access;
     }
 
+    await _locationService.requestTrackingNotificationPermission();
+
     _emit(WorkoutGpsStatus.searching);
 
-    _positionSubscription = _locationService.getPositionStream().listen(
-      _handlePosition,
-      onError: (Object error) {
-        _emit(WorkoutGpsStatus.error);
-      },
-    );
+    try {
+      _positionSubscription = _locationService.getPositionStream().listen(
+        _handlePosition,
+        onError: (Object error) {
+          _emit(WorkoutGpsStatus.error);
+        },
+        onDone: () {
+          _positionSubscription = null;
+        },
+        cancelOnError: false,
+      );
+    } catch (_) {
+      _emit(WorkoutGpsStatus.error);
+      rethrow;
+    }
 
     return access;
   }
@@ -127,8 +137,6 @@ class WorkoutLocationTracker {
       }
     }
 
-    // Mesmo pontos descartados por salto reposicionam a
-    // referência, evitando que o rastreador fique travado.
     _lastAcceptedPosition = position;
 
     _emit(WorkoutGpsStatus.tracking);
@@ -176,6 +184,7 @@ class WorkoutLocationTracker {
 
   Future<void> _cancelSubscription() async {
     await _positionSubscription?.cancel();
+
     _positionSubscription = null;
   }
 
