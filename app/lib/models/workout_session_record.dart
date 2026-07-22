@@ -5,6 +5,8 @@ class WorkoutSessionRecord {
   final int elapsedSeconds;
   final int plannedSeconds;
   final bool completedManually;
+  final double distanceMeters;
+  final int validGpsPointCount;
 
   const WorkoutSessionRecord({
     required this.id,
@@ -13,7 +15,30 @@ class WorkoutSessionRecord {
     required this.elapsedSeconds,
     required this.plannedSeconds,
     required this.completedManually,
+    this.distanceMeters = 0,
+    this.validGpsPointCount = 0,
   });
+
+  double? get averageSpeedKmPerHour {
+    if (elapsedSeconds <= 0 || distanceMeters <= 0) {
+      return null;
+    }
+
+    final distanceKilometers = distanceMeters / 1000;
+    final elapsedHours = elapsedSeconds / 3600;
+
+    return distanceKilometers / elapsedHours;
+  }
+
+  int? get averagePaceSecondsPerKm {
+    if (elapsedSeconds <= 0 || distanceMeters <= 0) {
+      return null;
+    }
+
+    final distanceKilometers = distanceMeters / 1000;
+
+    return (elapsedSeconds / distanceKilometers).round();
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -23,6 +48,8 @@ class WorkoutSessionRecord {
       'elapsedSeconds': elapsedSeconds,
       'plannedSeconds': plannedSeconds,
       'completedManually': completedManually,
+      'distanceMeters': distanceMeters,
+      'validGpsPointCount': validGpsPointCount,
     };
   }
 
@@ -36,6 +63,8 @@ class WorkoutSessionRecord {
       elapsedSeconds: (json['elapsedSeconds'] as num?)?.toInt() ?? 0,
       plannedSeconds: (json['plannedSeconds'] as num?)?.toInt() ?? 0,
       completedManually: json['completedManually'] as bool? ?? false,
+      distanceMeters: (json['distanceMeters'] as num?)?.toDouble() ?? 0,
+      validGpsPointCount: (json['validGpsPointCount'] as num?)?.toInt() ?? 0,
     );
   }
 }

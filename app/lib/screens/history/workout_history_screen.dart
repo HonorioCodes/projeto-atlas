@@ -26,6 +26,12 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     });
   }
 
+  double get _totalDistanceMeters {
+    return _records.fold<double>(0, (total, record) {
+      return total + record.distanceMeters;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -127,7 +133,9 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     final safeSeconds = totalSeconds < 0 ? 0 : totalSeconds;
 
     final hours = safeSeconds ~/ 3600;
+
     final minutes = (safeSeconds % 3600) ~/ 60;
+
     final seconds = safeSeconds % 60;
 
     final minutesText = minutes.toString().padLeft(2, '0');
@@ -143,12 +151,44 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     return '$hoursText:$minutesText:$secondsText';
   }
 
+  String _formatDistance(double meters) {
+    if (meters < 1000) {
+      return '${meters.round()} m';
+    }
+
+    return '${(meters / 1000).toStringAsFixed(2)} km';
+  }
+
+  String _formatPace(int? secondsPerKilometer) {
+    if (secondsPerKilometer == null) {
+      return '--';
+    }
+
+    final minutes = secondsPerKilometer ~/ 60;
+
+    final seconds = secondsPerKilometer % 60;
+
+    return '$minutes:'
+        '${seconds.toString().padLeft(2, '0')} min/km';
+  }
+
+  String _formatSpeed(double? kilometersPerHour) {
+    if (kilometersPerHour == null) {
+      return '--';
+    }
+
+    return '${kilometersPerHour.toStringAsFixed(2)} km/h';
+  }
+
   String _formatDate(DateTime date) {
     final day = date.day.toString().padLeft(2, '0');
+
     final month = date.month.toString().padLeft(2, '0');
+
     final year = date.year.toString();
 
     final hour = date.hour.toString().padLeft(2, '0');
+
     final minute = date.minute.toString().padLeft(2, '0');
 
     return '$day/$month/$year às $hour:$minute';
@@ -185,6 +225,14 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
                 value: _formatDuration(_totalElapsedSeconds),
               ),
             ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _SummaryItem(
+                icon: Icons.route_outlined,
+                label: 'Distância',
+                value: _formatDistance(_totalDistanceMeters),
+              ),
+            ),
           ],
         ),
       ),
@@ -193,6 +241,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
   Widget _buildRecordCard(WorkoutSessionRecord record) {
     final progress = _calculateProgress(record);
+
     final percentage = (progress * 100).round();
 
     return Card(
@@ -220,6 +269,26 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
             Text(
               'Tempo realizado: '
               '${_formatDuration(record.elapsedSeconds)}',
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Distância: '
+              '${_formatDistance(record.distanceMeters)}',
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Ritmo médio: '
+              '${_formatPace(record.averagePaceSecondsPerKm)}',
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Velocidade média: '
+              '${_formatSpeed(record.averageSpeedKmPerHour)}',
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Pontos válidos de GPS: '
+              '${record.validGpsPointCount}',
             ),
             const SizedBox(height: 6),
             Text(

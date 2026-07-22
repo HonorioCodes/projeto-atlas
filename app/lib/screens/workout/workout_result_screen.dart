@@ -8,6 +8,8 @@ class WorkoutResultScreen extends StatefulWidget {
   final int elapsedSeconds;
   final int plannedSeconds;
   final bool completedManually;
+  final double distanceMeters;
+  final int validGpsPointCount;
 
   const WorkoutResultScreen({
     super.key,
@@ -15,6 +17,8 @@ class WorkoutResultScreen extends StatefulWidget {
     required this.elapsedSeconds,
     required this.plannedSeconds,
     required this.completedManually,
+    required this.distanceMeters,
+    required this.validGpsPointCount,
   });
 
   @override
@@ -39,6 +43,28 @@ class _WorkoutResultScreenState extends State<WorkoutResultScreen> {
     return value.clamp(0.0, 1.0).toDouble();
   }
 
+  double? get _averageSpeedKmPerHour {
+    if (widget.elapsedSeconds <= 0 || widget.distanceMeters <= 0) {
+      return null;
+    }
+
+    final distanceKilometers = widget.distanceMeters / 1000;
+
+    final elapsedHours = widget.elapsedSeconds / 3600;
+
+    return distanceKilometers / elapsedHours;
+  }
+
+  int? get _averagePaceSecondsPerKm {
+    if (widget.elapsedSeconds <= 0 || widget.distanceMeters <= 0) {
+      return null;
+    }
+
+    final distanceKilometers = widget.distanceMeters / 1000;
+
+    return (widget.elapsedSeconds / distanceKilometers).round();
+  }
+
   String _formatTime(int totalSeconds) {
     final safeSeconds = totalSeconds < 0 ? 0 : totalSeconds;
 
@@ -47,6 +73,7 @@ class _WorkoutResultScreenState extends State<WorkoutResultScreen> {
     final seconds = safeSeconds % 60;
 
     final minutesText = minutes.toString().padLeft(2, '0');
+
     final secondsText = seconds.toString().padLeft(2, '0');
 
     if (hours == 0) {
@@ -56,6 +83,35 @@ class _WorkoutResultScreenState extends State<WorkoutResultScreen> {
     final hoursText = hours.toString().padLeft(2, '0');
 
     return '$hoursText:$minutesText:$secondsText';
+  }
+
+  String _formatDistance(double meters) {
+    if (meters < 1000) {
+      return '${meters.round()} m';
+    }
+
+    return '${(meters / 1000).toStringAsFixed(2)} km';
+  }
+
+  String _formatPace(int? secondsPerKilometer) {
+    if (secondsPerKilometer == null) {
+      return '--';
+    }
+
+    final minutes = secondsPerKilometer ~/ 60;
+
+    final seconds = secondsPerKilometer % 60;
+
+    return '$minutes:'
+        '${seconds.toString().padLeft(2, '0')} min/km';
+  }
+
+  String _formatSpeed(double? kilometersPerHour) {
+    if (kilometersPerHour == null) {
+      return '--';
+    }
+
+    return '${kilometersPerHour.toStringAsFixed(2)} km/h';
   }
 
   Future<void> _saveAndFinish() async {
@@ -77,6 +133,8 @@ class _WorkoutResultScreenState extends State<WorkoutResultScreen> {
       elapsedSeconds: widget.elapsedSeconds,
       plannedSeconds: widget.plannedSeconds,
       completedManually: widget.completedManually,
+      distanceMeters: widget.distanceMeters,
+      validGpsPointCount: widget.validGpsPointCount,
     );
 
     try {
@@ -94,7 +152,9 @@ class _WorkoutResultScreenState extends State<WorkoutResultScreen> {
 
       setState(() {
         _isSaving = false;
-        _saveError = 'Não foi possível salvar o treino. Tente novamente.';
+        _saveError =
+            'Não foi possível salvar o treino. '
+            'Tente novamente.';
       });
     }
   }
@@ -145,6 +205,26 @@ class _WorkoutResultScreenState extends State<WorkoutResultScreen> {
                       _ResultRow(
                         label: 'Duração planejada',
                         value: _formatTime(widget.plannedSeconds),
+                      ),
+                      const Divider(height: 28),
+                      _ResultRow(
+                        label: 'Distância',
+                        value: _formatDistance(widget.distanceMeters),
+                      ),
+                      const Divider(height: 28),
+                      _ResultRow(
+                        label: 'Ritmo médio',
+                        value: _formatPace(_averagePaceSecondsPerKm),
+                      ),
+                      const Divider(height: 28),
+                      _ResultRow(
+                        label: 'Velocidade média',
+                        value: _formatSpeed(_averageSpeedKmPerHour),
+                      ),
+                      const Divider(height: 28),
+                      _ResultRow(
+                        label: 'Pontos válidos de GPS',
+                        value: widget.validGpsPointCount.toString(),
                       ),
                       const Divider(height: 28),
                       _ResultRow(
