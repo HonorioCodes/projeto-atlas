@@ -7,29 +7,32 @@ import '../models/user_model.dart';
 class UserStorageService {
   static const String _userKey = 'registered_user';
 
-  final SharedPreferencesAsync _preferences =
-      SharedPreferencesAsync();
+  final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
 
   Future<void> saveUser(UserModel user) async {
     final userJson = jsonEncode(user.toMap());
 
-    await _preferences.setString(
-      _userKey,
-      userJson,
-    );
+    await _preferences.setString(_userKey, userJson);
   }
 
   Future<UserModel?> loadUser() async {
     final userJson = await _preferences.getString(_userKey);
 
-    if (userJson == null) {
+    if (userJson == null || userJson.isEmpty) {
       return null;
     }
 
-    final userMap =
-        jsonDecode(userJson) as Map<String, dynamic>;
+    try {
+      final decoded = jsonDecode(userJson);
 
-    return UserModel.fromMap(userMap);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+
+      return UserModel.fromMap(decoded);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> deleteUser() async {

@@ -19,6 +19,7 @@ class UserModel {
 
   int get age {
     final today = DateTime.now();
+
     var calculatedAge = today.year - birthDate.year;
 
     final birthdayHasNotOccurredYet =
@@ -34,6 +35,11 @@ class UserModel {
 
   double get bmi {
     final heightInMeters = height / 100;
+
+    if (heightInMeters <= 0) {
+      return 0;
+    }
+
     return currentWeight / (heightInMeters * heightInMeters);
   }
 
@@ -63,6 +69,26 @@ class UserModel {
     return 'Obesidade grau III';
   }
 
+  UserModel copyWith({
+    String? name,
+    DateTime? birthDate,
+    String? sex,
+    double? height,
+    double? currentWeight,
+    double? targetWeight,
+    String? mainGoal,
+  }) {
+    return UserModel(
+      name: name ?? this.name,
+      birthDate: birthDate ?? this.birthDate,
+      sex: sex ?? this.sex,
+      height: height ?? this.height,
+      currentWeight: currentWeight ?? this.currentWeight,
+      targetWeight: targetWeight ?? this.targetWeight,
+      mainGoal: mainGoal ?? this.mainGoal,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'name': name,
@@ -77,15 +103,17 @@ class UserModel {
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
-      name: map['name'] as String,
-      birthDate: DateTime.parse(map['birthDate'] as String),
-      sex: map['sex'] as String,
-      height: (map['height'] as num).toDouble(),
-      currentWeight: (map['currentWeight'] as num).toDouble(),
+      name: map['name'] as String? ?? '',
+      birthDate:
+          DateTime.tryParse(map['birthDate'] as String? ?? '') ??
+          DateTime.now(),
+      sex: map['sex'] as String? ?? '',
+      height: (map['height'] as num?)?.toDouble() ?? 0,
+      currentWeight: (map['currentWeight'] as num?)?.toDouble() ?? 0,
       targetWeight: map['targetWeight'] == null
           ? null
           : (map['targetWeight'] as num).toDouble(),
-      mainGoal: map['mainGoal'] as String,
+      mainGoal: map['mainGoal'] as String? ?? '',
     );
   }
 }
