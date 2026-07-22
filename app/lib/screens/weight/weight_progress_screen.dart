@@ -25,6 +25,7 @@ class _WeightProgressScreenState extends State<WeightProgressScreen> {
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isSavingHeight = false;
   String? _errorMessage;
 
   double get _initialWeight {
@@ -48,45 +49,27 @@ class _WeightProgressScreenState extends State<WeightProgressScreen> {
   }
 
   double get _currentBmi {
-    final height = _user?.height ?? 0;
+    final user = _user;
 
-    if (height <= 0 || _currentWeight <= 0) {
+    if (user == null) {
       return 0;
     }
 
-    final heightInMeters = height / 100;
-
-    return _currentWeight / (heightInMeters * heightInMeters);
+    return user.calculateBmiForWeight(_currentWeight);
   }
 
   String get _bmiClassification {
-    final value = _currentBmi;
+    final user = _user;
 
-    if (value <= 0) {
+    if (user == null) {
       return 'Sem dados';
     }
 
-    if (value < 18.5) {
-      return 'Abaixo do peso';
+    if (!user.hasValidHeight) {
+      return 'Altura não cadastrada';
     }
 
-    if (value < 25) {
-      return 'Peso normal';
-    }
-
-    if (value < 30) {
-      return 'Sobrepeso';
-    }
-
-    if (value < 35) {
-      return 'Obesidade grau I';
-    }
-
-    if (value < 40) {
-      return 'Obesidade grau II';
-    }
-
-    return 'Obesidade grau III';
+    return user.classifyBmi(_currentBmi);
   }
 
   double? get _goalProgress {
@@ -165,10 +148,66 @@ class _WeightProgressScreenState extends State<WeightProgressScreen> {
 
       setState(() {
         _isLoading = false;
-        _errorMessage =
-            'Não foi possível carregar '
-            'a evolução do peso.';
+        _errorMessage = 'Não foi possível carregar a evolução do peso.';
       });
+    }
+  }
+
+  Future<void> _registerHeight() async {
+    if (_isSavingHeight) {
+      return;
+    }
+
+    final currentUser = _user;
+
+    if (currentUser == null) {
+      return;
+    }
+
+    final heightCm = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) {
+        return const _HeightEntryDialog();
+      },
+    );
+
+    if (!mounted || heightCm == null) {
+      return;
+    }
+
+    setState(() {
+      _isSavingHeight = true;
+    });
+
+    try {
+      final updatedUser = currentUser.copyWith(height: heightCm);
+
+      await _userStorageService.saveUser(updatedUser);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _user = updatedUser;
+        _isSavingHeight = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Altura cadastrada com sucesso.')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSavingHeight = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível cadastrar a altura.')),
+      );
     }
   }
 
@@ -257,13 +296,9 @@ class _WeightProgressScreenState extends State<WeightProgressScreen> {
 
   String _formatDate(DateTime date) {
     final day = date.day.toString().padLeft(2, '0');
-
     final month = date.month.toString().padLeft(2, '0');
-
     final year = date.year.toString();
-
     final hour = date.hour.toString().padLeft(2, '0');
-
     final minute = date.minute.toString().padLeft(2, '0');
 
     return '$day/$month/$year às $hour:$minute';
@@ -323,6 +358,62 @@ class _WeightProgressScreenState extends State<WeightProgressScreen> {
     );
   }
 
+  Widget _buildHeightWarning() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.height,
+                  size: 32,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Cadastre sua altura',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'A altura é necessária para calcular e acompanhar seu IMC.',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _isSavingHeight ? null : _registerHeight,
+                icon: _isSavingHeight
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.edit_outlined),
+                label: Text(
+                  _isSavingHeight ? 'Salvando...' : 'Cadastrar altura',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTargetCard() {
     final targetWeight = _user?.targetWeight;
 
@@ -336,8 +427,7 @@ class _WeightProgressScreenState extends State<WeightProgressScreen> {
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  'Nenhuma meta de peso foi '
-                  'definida no cadastro.',
+                  'Nenhuma meta de peso foi definida no cadastro.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
@@ -348,7 +438,6 @@ class _WeightProgressScreenState extends State<WeightProgressScreen> {
     }
 
     final progress = _goalProgress ?? 0;
-
     final remaining = _remainingToTarget ?? 0;
 
     return Card(
@@ -383,9 +472,7 @@ class _WeightProgressScreenState extends State<WeightProgressScreen> {
             Text(
               remaining <= 0.05
                   ? 'Meta atingida.'
-                  : 'Faltam '
-                        '${_formatWeight(remaining)} '
-                        'para alcançar a meta.',
+                  : 'Faltam ${_formatWeight(remaining)} para alcançar a meta.',
             ),
           ],
         ),
@@ -441,6 +528,9 @@ class _WeightProgressScreenState extends State<WeightProgressScreen> {
       );
     }
 
+    final user = _user;
+    final hasValidHeight = user?.hasValidHeight ?? false;
+
     return RefreshIndicator(
       onRefresh: _loadData,
       child: ListView(
@@ -453,11 +543,14 @@ class _WeightProgressScreenState extends State<WeightProgressScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Registre suas pesagens e acompanhe '
-            'sua evolução até a meta.',
+            'Registre suas pesagens e acompanhe sua evolução até a meta.',
           ),
           const SizedBox(height: 22),
           _buildSummaryGrid(),
+          if (!hasValidHeight) ...[
+            const SizedBox(height: 20),
+            _buildHeightWarning(),
+          ],
           const SizedBox(height: 20),
           _buildTargetCard(),
           const SizedBox(height: 20),
@@ -579,6 +672,109 @@ class _WeightRecordCard extends StatelessWidget {
             ? const Chip(label: Text('Inicial'))
             : null,
       ),
+    );
+  }
+}
+
+class _HeightEntryDialog extends StatefulWidget {
+  const _HeightEntryDialog();
+
+  @override
+  State<_HeightEntryDialog> createState() {
+    return _HeightEntryDialogState();
+  }
+}
+
+class _HeightEntryDialogState extends State<_HeightEntryDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+
+    super.dispose();
+  }
+
+  double? _parseHeightCm(String value) {
+    final normalized = value.trim().replaceAll(',', '.');
+
+    var height = double.tryParse(normalized);
+
+    if (height == null) {
+      return null;
+    }
+
+    if (height <= 3) {
+      height *= 100;
+    }
+
+    return height;
+  }
+
+  String? _validateHeight(String? value) {
+    final heightCm = _parseHeightCm(value ?? '');
+
+    if (heightCm == null) {
+      return 'Digite uma altura válida.';
+    }
+
+    if (heightCm < 100 || heightCm > 250) {
+      return 'Digite uma altura entre 100 e 250 cm.';
+    }
+
+    return null;
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final heightCm = _parseHeightCm(_controller.text);
+
+    if (heightCm == null) {
+      return;
+    }
+
+    Navigator.of(context).pop(heightCm);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Cadastrar altura'),
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textInputAction: TextInputAction.done,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+          ],
+          decoration: const InputDecoration(
+            labelText: 'Altura',
+            hintText: 'Ex.: 179 ou 1,79',
+            helperText: 'Aceita centímetros ou metros',
+          ),
+          validator: _validateHeight,
+          onFieldSubmitted: (_) {
+            _submit();
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Salvar')),
+      ],
     );
   }
 }

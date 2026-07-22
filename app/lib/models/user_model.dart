@@ -33,18 +33,40 @@ class UserModel {
     return calculatedAge;
   }
 
-  double get bmi {
-    final heightInMeters = height / 100;
-
-    if (heightInMeters <= 0) {
+  double get heightInMeters {
+    if (height <= 0) {
       return 0;
     }
 
-    return currentWeight / (heightInMeters * heightInMeters);
+    if (height <= 3) {
+      return height;
+    }
+
+    return height / 100;
   }
 
-  String get bmiClassification {
-    final value = bmi;
+  bool get hasValidHeight {
+    final value = heightInMeters;
+
+    return value >= 1 && value <= 2.5;
+  }
+
+  double calculateBmiForWeight(double weightKg) {
+    if (!hasValidHeight || weightKg <= 0) {
+      return 0;
+    }
+
+    return weightKg / (heightInMeters * heightInMeters);
+  }
+
+  double get bmi {
+    return calculateBmiForWeight(currentWeight);
+  }
+
+  String classifyBmi(double value) {
+    if (value <= 0) {
+      return 'Sem dados';
+    }
 
     if (value < 18.5) {
       return 'Abaixo do peso';
@@ -67,6 +89,10 @@ class UserModel {
     }
 
     return 'Obesidade grau III';
+  }
+
+  String get bmiClassification {
+    return classifyBmi(bmi);
   }
 
   UserModel copyWith({
