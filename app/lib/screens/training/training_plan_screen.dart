@@ -4,11 +4,14 @@ import '../../models/training_week_model.dart';
 import '../../models/workout_model.dart';
 import '../../services/plan_storage_service.dart';
 import '../../services/workout_progress_service.dart';
+import '../charts/progress_charts_screen.dart';
 import '../history/workout_history_screen.dart';
 import '../location/location_setup_screen.dart';
 import '../plans/plans_screen.dart';
 import '../weight/weight_progress_screen.dart';
 import '../workout/workout_detail_screen.dart';
+
+enum _EvolutionMenuAction { weight, statistics, charts }
 
 class TrainingPlanScreen extends StatefulWidget {
   final String planId;
@@ -120,6 +123,29 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _openProgressCharts() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return const ProgressChartsScreen();
+        },
+      ),
+    );
+  }
+
+  Future<void> _handleEvolutionMenu(_EvolutionMenuAction action) async {
+    switch (action) {
+      case _EvolutionMenuAction.weight:
+        await _openWeightProgress();
+
+      case _EvolutionMenuAction.statistics:
+        await _openHistory();
+
+      case _EvolutionMenuAction.charts:
+        await _openProgressCharts();
+    }
   }
 
   Future<void> _updateWorkout(int index, bool isCompleted) async {
@@ -350,6 +376,19 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     return widgets;
   }
 
+  PopupMenuItem<_EvolutionMenuAction> _buildEvolutionMenuItem({
+    required _EvolutionMenuAction value,
+    required IconData icon,
+    required String label,
+  }) {
+    return PopupMenuItem<_EvolutionMenuAction>(
+      value: value,
+      child: Row(
+        children: [Icon(icon), const SizedBox(width: 12), Text(label)],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -357,19 +396,33 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
-            onPressed: _openWeightProgress,
-            icon: const Icon(Icons.monitor_weight_outlined),
-            tooltip: 'Evolução do peso',
-          ),
-          IconButton(
             onPressed: _openLocationSetup,
             icon: const Icon(Icons.gps_fixed),
             tooltip: 'Configurar GPS',
           ),
-          IconButton(
-            onPressed: _openHistory,
+          PopupMenuButton<_EvolutionMenuAction>(
             icon: const Icon(Icons.insights_outlined),
-            tooltip: 'Evolução e estatísticas',
+            tooltip: 'Evolução',
+            onSelected: _handleEvolutionMenu,
+            itemBuilder: (context) {
+              return [
+                _buildEvolutionMenuItem(
+                  value: _EvolutionMenuAction.weight,
+                  icon: Icons.monitor_weight_outlined,
+                  label: 'Evolução do peso',
+                ),
+                _buildEvolutionMenuItem(
+                  value: _EvolutionMenuAction.statistics,
+                  icon: Icons.analytics_outlined,
+                  label: 'Estatísticas',
+                ),
+                _buildEvolutionMenuItem(
+                  value: _EvolutionMenuAction.charts,
+                  icon: Icons.show_chart,
+                  label: 'Gráficos',
+                ),
+              ];
+            },
           ),
           IconButton(
             onPressed: _changePlan,
