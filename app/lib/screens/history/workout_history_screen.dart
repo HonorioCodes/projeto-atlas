@@ -24,6 +24,46 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
+  DateTime get _startOfToday {
+    final now = DateTime.now();
+
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  int? get _selectedPeriodDays {
+    switch (_selectedPeriod) {
+      case _StatisticsPeriod.sevenDays:
+        return 7;
+
+      case _StatisticsPeriod.thirtyDays:
+        return 30;
+
+      case _StatisticsPeriod.all:
+        return null;
+    }
+  }
+
+  DateTime? get _selectedPeriodStart {
+    final days = _selectedPeriodDays;
+
+    if (days == null) {
+      return null;
+    }
+
+    return _startOfToday.subtract(Duration(days: days - 1));
+  }
+
+  DateTime? get _previousPeriodStart {
+    final currentStart = _selectedPeriodStart;
+    final days = _selectedPeriodDays;
+
+    if (currentStart == null || days == null) {
+      return null;
+    }
+
+    return currentStart.subtract(Duration(days: days));
+  }
+
   List<WorkoutSessionRecord> get _filteredRecords {
     final startDate = _selectedPeriodStart;
 
@@ -36,21 +76,21 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     }).toList();
   }
 
-  DateTime? get _selectedPeriodStart {
-    final now = DateTime.now();
+  List<WorkoutSessionRecord> get _previousPeriodRecords {
+    final startDate = _previousPeriodStart;
+    final endDate = _selectedPeriodStart;
 
-    final today = DateTime(now.year, now.month, now.day);
-
-    switch (_selectedPeriod) {
-      case _StatisticsPeriod.sevenDays:
-        return today.subtract(const Duration(days: 6));
-
-      case _StatisticsPeriod.thirtyDays:
-        return today.subtract(const Duration(days: 29));
-
-      case _StatisticsPeriod.all:
-        return null;
+    if (startDate == null || endDate == null) {
+      return [];
     }
+
+    return _records.where((record) {
+      final isAtOrAfterStart = !record.completedAt.isBefore(startDate);
+
+      final isBeforeEnd = record.completedAt.isBefore(endDate);
+
+      return isAtOrAfterStart && isBeforeEnd;
+    }).toList();
   }
 
   int get _totalWorkoutCount {
@@ -58,15 +98,23 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
   }
 
   int get _totalElapsedSeconds {
-    return _filteredRecords.fold<int>(0, (total, record) {
-      return total + record.elapsedSeconds;
-    });
+    return _sumElapsedSeconds(_filteredRecords);
   }
 
   double get _totalDistanceMeters {
-    return _filteredRecords.fold<double>(0, (total, record) {
-      return total + record.distanceMeters;
-    });
+    return _sumDistanceMeters(_filteredRecords);
+  }
+
+  int get _previousWorkoutCount {
+    return _previousPeriodRecords.length;
+  }
+
+  int get _previousElapsedSeconds {
+    return _sumElapsedSeconds(_previousPeriodRecords);
+  }
+
+  double get _previousDistanceMeters {
+    return _sumDistanceMeters(_previousPeriodRecords);
   }
 
   int get _workoutsThisWeek {
@@ -101,6 +149,50 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     final distanceKilometers = _totalDistanceMeters / 1000;
 
     return (_totalElapsedSeconds / distanceKilometers).round();
+  }
+
+  WorkoutSessionRecord? get _longestDistanceRecord {
+    final recordsWithDistance = _filteredRecords.where((record) {
+      return record.distanceMeters > 0;
+    }).toList();
+
+    if (recordsWithDistance.isEmpty) {
+      return null;
+    }
+
+    recordsWithDistance.sort((first, second) {
+      return second.distanceMeters.compareTo(first.distanceMeters);
+    });
+
+    return recordsWithDistance.first;
+  }
+
+  WorkoutSessionRecord? get _longestDurationRecord {
+    final recordsWithDuration = _filteredRecords.where((record) {
+      return record.elapsedSeconds > 0;
+    }).toList();
+
+    if (recordsWithDuration.isEmpty) {
+      return null;
+    }
+
+    recordsWithDuration.sort((first, second) {
+      return second.elapsedSeconds.compareTo(first.elapsedSeconds);
+    });
+
+    return recordsWithDuration.first;
+  }
+
+  int _sumElapsedSeconds(List<WorkoutSessionRecord> records) {
+    return records.fold<int>(0, (total, record) {
+      return total + record.elapsedSeconds;
+    });
+  }
+
+  double _sumDistanceMeters(List<WorkoutSessionRecord> records) {
+    return records.fold<double>(0, (total, record) {
+      return total + record.distanceMeters;
+    });
   }
 
   @override
@@ -263,6 +355,14 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     return '$day/$month/$year às $hour:$minute';
   }
 
+  String _formatShortDate(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+
+    final month = date.month.toString().padLeft(2, '0');
+
+    return '$day/$month';
+  }
+
   double _calculateWorkoutProgress(WorkoutSessionRecord record) {
     if (record.plannedSeconds <= 0) {
       return 0;
@@ -284,6 +384,51 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
       case _StatisticsPeriod.all:
         return 'Todo período';
     }
+  }
+
+  String get _previousPeriodLabel {
+    switch (_selectedPeriod) {
+      case _StatisticsPeriod.sevenDays:
+        return '7 dias anteriores';
+
+      case _StatisticsPeriod.thirtyDays:
+        return '30 dias anteriores';
+
+      case _StatisticsPeriod.all:
+        return '';
+    }
+  }
+
+  String _formatComparison(num currentValue, num previousValue) {
+    if (previousValue == 0) {
+      if (currentValue == 0) {
+        return '0%';
+      }
+
+      return 'Novo';
+    }
+
+    final percentage = ((currentValue - previousValue) / previousValue) * 100;
+
+    if (percentage.abs() < 0.5) {
+      return '0%';
+    }
+
+    final sign = percentage > 0 ? '+' : '';
+
+    return '$sign${percentage.toStringAsFixed(0)}%';
+  }
+
+  int _comparisonDirection(num currentValue, num previousValue) {
+    if (currentValue > previousValue) {
+      return 1;
+    }
+
+    if (currentValue < previousValue) {
+      return -1;
+    }
+
+    return 0;
   }
 
   Widget _buildPeriodSelector() {
@@ -356,6 +501,199 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
           value: '$_workoutsThisWeek treinos',
         ),
       ],
+    );
+  }
+
+  Widget _buildComparisonCard() {
+    if (_selectedPeriod == _StatisticsPeriod.all) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              const Icon(Icons.compare_arrows, size: 30),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'Selecione 7 ou 30 dias para '
+                  'comparar com o período anterior.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.compare_arrows),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Comparação',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Em relação aos '
+              '$_previousPeriodLabel.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 18),
+            _ComparisonRow(
+              label: 'Treinos',
+              currentValue: _totalWorkoutCount.toString(),
+              previousValue: _previousWorkoutCount.toString(),
+              changeText: _formatComparison(
+                _totalWorkoutCount,
+                _previousWorkoutCount,
+              ),
+              direction: _comparisonDirection(
+                _totalWorkoutCount,
+                _previousWorkoutCount,
+              ),
+            ),
+            const Divider(height: 28),
+            _ComparisonRow(
+              label: 'Tempo total',
+              currentValue: _formatDuration(_totalElapsedSeconds),
+              previousValue: _formatDuration(_previousElapsedSeconds),
+              changeText: _formatComparison(
+                _totalElapsedSeconds,
+                _previousElapsedSeconds,
+              ),
+              direction: _comparisonDirection(
+                _totalElapsedSeconds,
+                _previousElapsedSeconds,
+              ),
+            ),
+            const Divider(height: 28),
+            _ComparisonRow(
+              label: 'Distância',
+              currentValue: _formatDistance(_totalDistanceMeters),
+              previousValue: _formatDistance(_previousDistanceMeters),
+              changeText: _formatComparison(
+                _totalDistanceMeters,
+                _previousDistanceMeters,
+              ),
+              direction: _comparisonDirection(
+                _totalDistanceMeters,
+                _previousDistanceMeters,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecordHighlight({
+    required IconData icon,
+    required String title,
+    required WorkoutSessionRecord? record,
+    required String Function(WorkoutSessionRecord record) valueBuilder,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: record == null
+          ? Row(
+              children: [
+                Icon(icon),
+                const SizedBox(width: 12),
+                Expanded(child: Text('$title: ainda sem dados')),
+              ],
+            )
+          : Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 32,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        valueBuilder(record),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${record.workoutTitle} • '
+                        '${_formatShortDate(record.completedAt)}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildRecordsCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.emoji_events_outlined),
+                const SizedBox(width: 10),
+                Text(
+                  'Recordes do período',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildRecordHighlight(
+              icon: Icons.route_outlined,
+              title: 'Maior distância',
+              record: _longestDistanceRecord,
+              valueBuilder: (record) {
+                return _formatDistance(record.distanceMeters);
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildRecordHighlight(
+              icon: Icons.timer_outlined,
+              title: 'Maior duração',
+              record: _longestDurationRecord,
+              valueBuilder: (record) {
+                return _formatDuration(record.elapsedSeconds);
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -476,6 +814,10 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
           _buildPeriodSelector(),
           const SizedBox(height: 20),
           _buildStatisticsGrid(),
+          const SizedBox(height: 20),
+          _buildComparisonCard(),
+          const SizedBox(height: 20),
+          _buildRecordsCard(),
           const SizedBox(height: 28),
           Text(
             'Atividades do período',
@@ -612,6 +954,72 @@ class _StatisticCard extends StatelessWidget {
   }
 }
 
+class _ComparisonRow extends StatelessWidget {
+  final String label;
+  final String currentValue;
+  final String previousValue;
+  final String changeText;
+  final int direction;
+
+  const _ComparisonRow({
+    required this.label,
+    required this.currentValue,
+    required this.previousValue,
+    required this.changeText,
+    required this.direction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final IconData trendIcon;
+    final Color trendColor;
+
+    if (direction > 0) {
+      trendIcon = Icons.arrow_upward;
+      trendColor = colorScheme.primary;
+    } else if (direction < 0) {
+      trendIcon = Icons.arrow_downward;
+      trendColor = colorScheme.error;
+    } else {
+      trendIcon = Icons.horizontal_rule;
+      trendColor = colorScheme.onSurfaceVariant;
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 4),
+              Text('Atual: $currentValue'),
+              Text(
+                'Anterior: $previousValue',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(trendIcon, size: 20, color: trendColor),
+            const SizedBox(width: 4),
+            Text(
+              changeText,
+              style: TextStyle(color: trendColor, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _RecordMetric extends StatelessWidget {
   final String label;
   final String value;
@@ -624,10 +1032,12 @@ class _RecordMetric extends StatelessWidget {
       children: [
         Expanded(child: Text(label)),
         const SizedBox(width: 16),
-        Text(
-          value,
-          textAlign: TextAlign.end,
-          style: Theme.of(context).textTheme.titleSmall,
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
         ),
       ],
     );
