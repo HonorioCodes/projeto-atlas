@@ -52,6 +52,32 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     return _hasStarted && _elapsedSeconds < _totalSeconds;
   }
 
+  double? get _averageSpeedKmPerHour {
+    final distance = _locationSnapshot.distanceMeters;
+
+    if (_elapsedSeconds <= 0 || distance < 20) {
+      return null;
+    }
+
+    final distanceKilometers = distance / 1000;
+
+    final elapsedHours = _elapsedSeconds / 3600;
+
+    return distanceKilometers / elapsedHours;
+  }
+
+  int? get _averagePaceSecondsPerKm {
+    final distance = _locationSnapshot.distanceMeters;
+
+    if (_elapsedSeconds <= 0 || distance < 20) {
+      return null;
+    }
+
+    final distanceKilometers = distance / 1000;
+
+    return (_elapsedSeconds / distanceKilometers).round();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -113,10 +139,13 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
   String _formatTime(int totalSeconds) {
     final hours = totalSeconds ~/ 3600;
+
     final minutes = (totalSeconds % 3600) ~/ 60;
+
     final seconds = totalSeconds % 60;
 
     final minutesText = minutes.toString().padLeft(2, '0');
+
     final secondsText = seconds.toString().padLeft(2, '0');
 
     if (hours == 0) {
@@ -136,9 +165,33 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     return '${(meters / 1000).toStringAsFixed(2)} km';
   }
 
+  String _formatAveragePace() {
+    final pace = _averagePaceSecondsPerKm;
+
+    if (pace == null) {
+      return '--';
+    }
+
+    final minutes = pace ~/ 60;
+    final seconds = pace % 60;
+
+    return '$minutes:'
+        '${seconds.toString().padLeft(2, '0')}';
+  }
+
+  String _formatAverageSpeed() {
+    final speed = _averageSpeedKmPerHour;
+
+    if (speed == null) {
+      return '--';
+    }
+
+    return speed.toStringAsFixed(2);
+  }
+
   String get _statusText {
     if (_elapsedSeconds >= _totalSeconds) {
-      return 'Treino concluído';
+      return 'Treino concluÃ­do';
     }
 
     if (_isStartingWorkout) {
@@ -153,7 +206,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       return 'Treino pausado';
     }
 
-    return 'Pronto para começar';
+    return 'Pronto para comeÃ§ar';
   }
 
   String get _gpsStatusText {
@@ -174,7 +227,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         return 'Pausado';
 
       case WorkoutGpsStatus.unavailable:
-        return 'Indisponível';
+        return 'IndisponÃ­vel';
 
       case WorkoutGpsStatus.error:
         return 'Erro no GPS';
@@ -249,9 +302,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
-            title: const Text('Não foi possível iniciar o GPS'),
+            title: const Text('NÃ£o foi possÃ­vel iniciar o GPS'),
             content: const Text(
-              'Verifique a localização do celular '
+              'Verifique a localizaÃ§Ã£o do celular '
               'e tente iniciar novamente.',
             ),
             actions: [
@@ -277,20 +330,26 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     switch (status) {
       case LocationAccessStatus.serviceDisabled:
         title = 'GPS desativado';
-        message = 'Ative a localização do celular para iniciar o treino.';
+        message =
+            'Ative a localizaÃ§Ã£o do celular '
+            'para iniciar o treino.';
         actionLabel = 'Ativar GPS';
         opensSettings = true;
 
       case LocationAccessStatus.permissionDenied:
-        title = 'Permissão necessária';
-        message = 'Permita o acesso à localização e tente iniciar novamente.';
+        title = 'PermissÃ£o necessÃ¡ria';
+        message =
+            'Permita o acesso Ã  localizaÃ§Ã£o '
+            'e tente iniciar novamente.';
         actionLabel = 'Entendi';
         opensSettings = false;
 
       case LocationAccessStatus.permissionDeniedForever:
-        title = 'Permissão bloqueada';
-        message = 'Abra as configurações do aplicativo e libere a localização.';
-        actionLabel = 'Abrir configurações';
+        title = 'PermissÃ£o bloqueada';
+        message =
+            'Abra as configuraÃ§Ãµes do aplicativo '
+            'e libere a localizaÃ§Ã£o.';
+        actionLabel = 'Abrir configuraÃ§Ãµes';
         opensSettings = true;
 
       case LocationAccessStatus.granted:
@@ -372,6 +431,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
   Future<void> _completeWorkoutAutomatically() async {
     await _locationTracker.stop();
+
     await _emitWorkoutCompletedFeedback();
 
     if (!mounted) {
@@ -453,6 +513,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     final wasRunning = _isRunning;
 
     _timer?.cancel();
+
     await _locationTracker.pause();
 
     if (_isRunning) {
@@ -474,8 +535,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         return AlertDialog(
           title: const Text('Sair do treino?'),
           content: const Text(
-            'Seu progresso nesta execução será perdido. '
-            'O treino não será marcado como concluído.',
+            'Seu progresso nesta execuÃ§Ã£o serÃ¡ perdido. '
+            'O treino nÃ£o serÃ¡ marcado como concluÃ­do.',
           ),
           actions: [
             TextButton(
@@ -527,6 +588,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
             elapsedSeconds: _elapsedSeconds,
             plannedSeconds: _totalSeconds,
             completedManually: completedManually,
+            distanceMeters: _locationSnapshot.distanceMeters,
+            validGpsPointCount: _locationSnapshot.validPointCount,
           );
         },
       ),
@@ -547,7 +610,12 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     final wasRunning = _isRunning;
 
     _timer?.cancel();
+
     await _locationTracker.pause();
+
+    if (!mounted) {
+      return;
+    }
 
     if (_isRunning) {
       setState(() {
@@ -562,7 +630,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         return AlertDialog(
           title: const Text('Concluir treino?'),
           content: const Text(
-            'O treino será marcado como concluído '
+            'O treino serÃ¡ marcado como concluÃ­do '
             'mesmo que ainda existam etapas pendentes.',
           ),
           actions: [
@@ -589,6 +657,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
     if (confirmed == true) {
       await _locationTracker.stop();
+
       await _emitWorkoutCompletedFeedback();
 
       if (!mounted) {
@@ -629,20 +698,30 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               children: [
                 Expanded(
                   child: _MetricItem(
-                    label: 'Distância',
+                    label: 'DistÃ¢ncia',
                     value: _formatDistance(_locationSnapshot.distanceMeters),
                   ),
                 ),
                 Expanded(
-                  child: _MetricItem(label: 'Precisão', value: _accuracyText),
+                  child: _MetricItem(
+                    label: 'Ritmo mÃ©dio',
+                    value: '${_formatAveragePace()} min/km',
+                  ),
                 ),
                 Expanded(
                   child: _MetricItem(
-                    label: 'Pontos',
-                    value: _locationSnapshot.validPointCount.toString(),
+                    label: 'Velocidade',
+                    value: '${_formatAverageSpeed()} km/h',
                   ),
                 ),
               ],
+            ),
+            const Divider(height: 28),
+            Text(
+              'PrecisÃ£o: $_accuracyText  â€¢  '
+              'Pontos vÃ¡lidos: '
+              '${_locationSnapshot.validPointCount}',
+              textAlign: TextAlign.center,
             ),
           ],
         ),
