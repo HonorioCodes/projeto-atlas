@@ -21,6 +21,8 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
   _StatisticsPeriod _selectedPeriod = _StatisticsPeriod.thirtyDays;
 
+  late DateTime _calendarMonth;
+
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -93,6 +95,18 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     }).toList();
   }
 
+  Set<int> get _allActiveDayKeys {
+    return _createActiveDayKeys(_records);
+  }
+
+  Set<int> get _filteredActiveDayKeys {
+    return _createActiveDayKeys(_filteredRecords);
+  }
+
+  Set<int> get _previousActiveDayKeys {
+    return _createActiveDayKeys(_previousPeriodRecords);
+  }
+
   int get _totalWorkoutCount {
     return _filteredRecords.length;
   }
@@ -103,6 +117,10 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
   double get _totalDistanceMeters {
     return _sumDistanceMeters(_filteredRecords);
+  }
+
+  int get _activeDayCount {
+    return _filteredActiveDayKeys.length;
   }
 
   int get _previousWorkoutCount {
@@ -117,6 +135,10 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     return _sumDistanceMeters(_previousPeriodRecords);
   }
 
+  int get _previousActiveDayCount {
+    return _previousActiveDayKeys.length;
+  }
+
   int get _workoutsThisWeek {
     final now = DateTime.now();
 
@@ -127,6 +149,63 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     return _records.where((record) {
       return !record.completedAt.isBefore(startOfWeek);
     }).length;
+  }
+
+  int get _currentStreak {
+    final activeDays = _allActiveDayKeys;
+
+    if (activeDays.isEmpty) {
+      return 0;
+    }
+
+    final todayKey = _dayKey(DateTime.now());
+
+    var cursor = todayKey;
+
+    if (!activeDays.contains(cursor)) {
+      cursor--;
+
+      if (!activeDays.contains(cursor)) {
+        return 0;
+      }
+    }
+
+    var streak = 0;
+
+    while (activeDays.contains(cursor)) {
+      streak++;
+      cursor--;
+    }
+
+    return streak;
+  }
+
+  int get _longestStreak {
+    final activeDays = _allActiveDayKeys.toList()..sort();
+
+    if (activeDays.isEmpty) {
+      return 0;
+    }
+
+    var longest = 1;
+    var current = 1;
+
+    for (var index = 1; index < activeDays.length; index++) {
+      final previous = activeDays[index - 1];
+      final currentDay = activeDays[index];
+
+      if (currentDay == previous + 1) {
+        current++;
+
+        if (current > longest) {
+          longest = current;
+        }
+      } else {
+        current = 1;
+      }
+    }
+
+    return longest;
   }
 
   double? get _averageSpeedKmPerHour {
@@ -183,6 +262,61 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     return recordsWithDuration.first;
   }
 
+  int get _calendarDaysInMonth {
+    return DateTime(_calendarMonth.year, _calendarMonth.month + 1, 0).day;
+  }
+
+  int get _calendarLeadingDays {
+    final firstDay = DateTime(_calendarMonth.year, _calendarMonth.month, 1);
+
+    return firstDay.weekday - 1;
+  }
+
+  int get _calendarGridItemCount {
+    final usedCells = _calendarLeadingDays + _calendarDaysInMonth;
+
+    return ((usedCells + 6) ~/ 7) * 7;
+  }
+
+  int get _calendarActiveDayCount {
+    final activeDays = _allActiveDayKeys;
+
+    var total = 0;
+
+    for (var day = 1; day <= _calendarDaysInMonth; day++) {
+      final date = DateTime(_calendarMonth.year, _calendarMonth.month, day);
+
+      if (activeDays.contains(_dayKey(date))) {
+        total++;
+      }
+    }
+
+    return total;
+  }
+
+  bool get _canOpenNextCalendarMonth {
+    final now = DateTime.now();
+
+    final currentMonth = DateTime(now.year, now.month);
+
+    return _calendarMonth.isBefore(currentMonth);
+  }
+
+  int _dayKey(DateTime date) {
+    return DateTime.utc(
+          date.year,
+          date.month,
+          date.day,
+        ).millisecondsSinceEpoch ~/
+        Duration.millisecondsPerDay;
+  }
+
+  Set<int> _createActiveDayKeys(List<WorkoutSessionRecord> records) {
+    return records.map((record) {
+      return _dayKey(record.completedAt);
+    }).toSet();
+  }
+
   int _sumElapsedSeconds(List<WorkoutSessionRecord> records) {
     return records.fold<int>(0, (total, record) {
       return total + record.elapsedSeconds;
@@ -198,6 +332,10 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
   @override
   void initState() {
     super.initState();
+
+    final now = DateTime.now();
+
+    _calendarMonth = DateTime(now.year, now.month);
 
     _loadRecords();
   }
@@ -292,11 +430,22 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     }
   }
 
+  void _changeCalendarMonth(int offset) {
+    setState(() {
+      _calendarMonth = DateTime(
+        _calendarMonth.year,
+        _calendarMonth.month + offset,
+      );
+    });
+  }
+
   String _formatDuration(int totalSeconds) {
     final safeSeconds = totalSeconds < 0 ? 0 : totalSeconds;
 
     final hours = safeSeconds ~/ 3600;
+
     final minutes = (safeSeconds % 3600) ~/ 60;
+
     final seconds = safeSeconds % 60;
 
     final minutesText = minutes.toString().padLeft(2, '0');
@@ -361,6 +510,34 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     final month = date.month.toString().padLeft(2, '0');
 
     return '$day/$month';
+  }
+
+  String _formatDayCount(int days) {
+    if (days == 1) {
+      return '1 dia';
+    }
+
+    return '$days dias';
+  }
+
+  String _calendarMonthLabel() {
+    const monthNames = [
+      'Janeiro',
+      'Fevereiro',
+      'Março',
+      'Abril',
+      'Maio',
+      'Junho',
+      'Julho',
+      'Agosto',
+      'Setembro',
+      'Outubro',
+      'Novembro',
+      'Dezembro',
+    ];
+
+    return '${monthNames[_calendarMonth.month - 1]} '
+        '${_calendarMonth.year}';
   }
 
   double _calculateWorkoutProgress(WorkoutSessionRecord record) {
@@ -476,6 +653,11 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
           value: _totalWorkoutCount.toString(),
         ),
         _StatisticCard(
+          icon: Icons.event_available_outlined,
+          label: 'Dias ativos',
+          value: _formatDayCount(_activeDayCount),
+        ),
+        _StatisticCard(
           icon: Icons.timer_outlined,
           label: 'Tempo total',
           value: _formatDuration(_totalElapsedSeconds),
@@ -499,6 +681,11 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
           icon: Icons.calendar_today_outlined,
           label: 'Nesta semana',
           value: '$_workoutsThisWeek treinos',
+        ),
+        _StatisticCard(
+          icon: Icons.local_fire_department_outlined,
+          label: 'Sequência atual',
+          value: _formatDayCount(_currentStreak),
         ),
       ],
     );
@@ -562,6 +749,20 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
               direction: _comparisonDirection(
                 _totalWorkoutCount,
                 _previousWorkoutCount,
+              ),
+            ),
+            const Divider(height: 28),
+            _ComparisonRow(
+              label: 'Dias ativos',
+              currentValue: _formatDayCount(_activeDayCount),
+              previousValue: _formatDayCount(_previousActiveDayCount),
+              changeText: _formatComparison(
+                _activeDayCount,
+                _previousActiveDayCount,
+              ),
+              direction: _comparisonDirection(
+                _activeDayCount,
+                _previousActiveDayCount,
               ),
             ),
             const Divider(height: 28),
@@ -697,6 +898,208 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     );
   }
 
+  Widget _buildStreakCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.local_fire_department,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Frequência e sequência',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: _StreakMetric(
+                    icon: Icons.local_fire_department_outlined,
+                    label: 'Sequência atual',
+                    value: _formatDayCount(_currentStreak),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StreakMetric(
+                    icon: Icons.emoji_events_outlined,
+                    label: 'Maior sequência',
+                    value: _formatDayCount(_longestStreak),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              _currentStreak > 0
+                  ? 'Continue ativo para aumentar '
+                        'sua sequência.'
+                  : 'Conclua um treino hoje para '
+                        'iniciar uma nova sequência.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalendarCard() {
+    const weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+    final activeDays = _allActiveDayKeys;
+    final todayKey = _dayKey(DateTime.now());
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.calendar_month_outlined),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Calendário de atividades',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () {
+                    _changeCalendarMonth(-1);
+                  },
+                  icon: const Icon(Icons.chevron_left),
+                  tooltip: 'Mês anterior',
+                ),
+                Expanded(
+                  child: Text(
+                    _calendarMonthLabel(),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _canOpenNextCalendarMonth
+                      ? () {
+                          _changeCalendarMonth(1);
+                        }
+                      : null,
+                  icon: const Icon(Icons.chevron_right),
+                  tooltip: 'Próximo mês',
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                for (final label in weekdayLabels)
+                  Expanded(
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _calendarGridItemCount,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 7,
+                mainAxisSpacing: 4,
+                crossAxisSpacing: 4,
+              ),
+              itemBuilder: (context, index) {
+                final dayNumber = index - _calendarLeadingDays + 1;
+
+                if (dayNumber < 1 || dayNumber > _calendarDaysInMonth) {
+                  return const SizedBox.shrink();
+                }
+
+                final date = DateTime(
+                  _calendarMonth.year,
+                  _calendarMonth.month,
+                  dayNumber,
+                );
+
+                final dateKey = _dayKey(date);
+
+                final isActive = activeDays.contains(dateKey);
+
+                final isToday = dateKey == todayKey;
+
+                final colorScheme = Theme.of(context).colorScheme;
+
+                return Semantics(
+                  label: isActive
+                      ? '$dayNumber, dia com treino'
+                      : '$dayNumber, sem treino',
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isActive ? colorScheme.primaryContainer : null,
+                      border: isToday
+                          ? Border.all(color: colorScheme.primary, width: 2)
+                          : null,
+                    ),
+                    child: Text(
+                      dayNumber.toString(),
+                      style: TextStyle(
+                        fontWeight: isActive || isToday
+                            ? FontWeight.w700
+                            : FontWeight.normal,
+                        color: isActive ? colorScheme.onPrimaryContainer : null,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '$_calendarActiveDayCount '
+                  '${_calendarActiveDayCount == 1 ? 'dia ativo' : 'dias ativos'} '
+                  'neste mês',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildWorkoutCard(WorkoutSessionRecord record) {
     final progress = _calculateWorkoutProgress(record);
 
@@ -807,8 +1210,8 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Acompanhe seus resultados e sua '
-            'frequência de treinos.',
+            'Acompanhe seus resultados, sua '
+            'frequência e suas sequências.',
           ),
           const SizedBox(height: 22),
           _buildPeriodSelector(),
@@ -818,6 +1221,10 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
           _buildComparisonCard(),
           const SizedBox(height: 20),
           _buildRecordsCard(),
+          const SizedBox(height: 20),
+          _buildStreakCard(),
+          const SizedBox(height: 20),
+          _buildCalendarCard(),
           const SizedBox(height: 28),
           Text(
             'Atividades do período',
@@ -1040,6 +1447,46 @@ class _RecordMetric extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _StreakMetric extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _StreakMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 30, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
     );
   }
 }
