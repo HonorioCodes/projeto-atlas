@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../models/workout_session_record.dart';
 import '../../services/workout_history_service.dart';
 
+enum _StatisticsPeriod { sevenDays, thirtyDays, all }
+
 class WorkoutHistoryScreen extends StatefulWidget {
   const WorkoutHistoryScreen({super.key});
 
@@ -17,19 +19,88 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
   List<WorkoutSessionRecord> _records = [];
 
+  _StatisticsPeriod _selectedPeriod = _StatisticsPeriod.thirtyDays;
+
   bool _isLoading = true;
   String? _errorMessage;
 
+  List<WorkoutSessionRecord> get _filteredRecords {
+    final startDate = _selectedPeriodStart;
+
+    if (startDate == null) {
+      return _records;
+    }
+
+    return _records.where((record) {
+      return !record.completedAt.isBefore(startDate);
+    }).toList();
+  }
+
+  DateTime? get _selectedPeriodStart {
+    final now = DateTime.now();
+
+    final today = DateTime(now.year, now.month, now.day);
+
+    switch (_selectedPeriod) {
+      case _StatisticsPeriod.sevenDays:
+        return today.subtract(const Duration(days: 6));
+
+      case _StatisticsPeriod.thirtyDays:
+        return today.subtract(const Duration(days: 29));
+
+      case _StatisticsPeriod.all:
+        return null;
+    }
+  }
+
+  int get _totalWorkoutCount {
+    return _filteredRecords.length;
+  }
+
   int get _totalElapsedSeconds {
-    return _records.fold<int>(0, (total, record) {
+    return _filteredRecords.fold<int>(0, (total, record) {
       return total + record.elapsedSeconds;
     });
   }
 
   double get _totalDistanceMeters {
-    return _records.fold<double>(0, (total, record) {
+    return _filteredRecords.fold<double>(0, (total, record) {
       return total + record.distanceMeters;
     });
+  }
+
+  int get _workoutsThisWeek {
+    final now = DateTime.now();
+
+    final startOfToday = DateTime(now.year, now.month, now.day);
+
+    final startOfWeek = startOfToday.subtract(Duration(days: now.weekday - 1));
+
+    return _records.where((record) {
+      return !record.completedAt.isBefore(startOfWeek);
+    }).length;
+  }
+
+  double? get _averageSpeedKmPerHour {
+    if (_totalElapsedSeconds <= 0 || _totalDistanceMeters <= 0) {
+      return null;
+    }
+
+    final distanceKilometers = _totalDistanceMeters / 1000;
+
+    final elapsedHours = _totalElapsedSeconds / 3600;
+
+    return distanceKilometers / elapsedHours;
+  }
+
+  int? get _averagePaceSecondsPerKm {
+    if (_totalElapsedSeconds <= 0 || _totalDistanceMeters <= 0) {
+      return null;
+    }
+
+    final distanceKilometers = _totalDistanceMeters / 1000;
+
+    return (_totalElapsedSeconds / distanceKilometers).round();
   }
 
   @override
@@ -63,7 +134,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Não foi possível carregar o histórico.';
+        _errorMessage = 'Não foi possível carregar suas estatísticas.';
       });
     }
   }
@@ -133,9 +204,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     final safeSeconds = totalSeconds < 0 ? 0 : totalSeconds;
 
     final hours = safeSeconds ~/ 3600;
-
     final minutes = (safeSeconds % 3600) ~/ 60;
-
     final seconds = safeSeconds % 60;
 
     final minutesText = minutes.toString().padLeft(2, '0');
@@ -194,7 +263,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     return '$day/$month/$year às $hour:$minute';
   }
 
-  double _calculateProgress(WorkoutSessionRecord record) {
+  double _calculateWorkoutProgress(WorkoutSessionRecord record) {
     if (record.plannedSeconds <= 0) {
       return 0;
     }
@@ -204,43 +273,94 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     return progress.clamp(0.0, 1.0).toDouble();
   }
 
-  Widget _buildSummary() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
+  String _periodLabel(_StatisticsPeriod period) {
+    switch (period) {
+      case _StatisticsPeriod.sevenDays:
+        return '7 dias';
+
+      case _StatisticsPeriod.thirtyDays:
+        return '30 dias';
+
+      case _StatisticsPeriod.all:
+        return 'Todo período';
+    }
+  }
+
+  Widget _buildPeriodSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Período', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            Expanded(
-              child: _SummaryItem(
-                icon: Icons.check_circle_outline,
-                label: 'Treinos',
-                value: _records.length.toString(),
+            for (final period in _StatisticsPeriod.values)
+              ChoiceChip(
+                label: Text(_periodLabel(period)),
+                selected: _selectedPeriod == period,
+                onSelected: (selected) {
+                  if (!selected) {
+                    return;
+                  }
+
+                  setState(() {
+                    _selectedPeriod = period;
+                  });
+                },
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _SummaryItem(
-                icon: Icons.timer_outlined,
-                label: 'Tempo total',
-                value: _formatDuration(_totalElapsedSeconds),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _SummaryItem(
-                icon: Icons.route_outlined,
-                label: 'Distância',
-                value: _formatDistance(_totalDistanceMeters),
-              ),
-            ),
           ],
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildRecordCard(WorkoutSessionRecord record) {
-    final progress = _calculateProgress(record);
+  Widget _buildStatisticsGrid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.35,
+      children: [
+        _StatisticCard(
+          icon: Icons.check_circle_outline,
+          label: 'Treinos',
+          value: _totalWorkoutCount.toString(),
+        ),
+        _StatisticCard(
+          icon: Icons.timer_outlined,
+          label: 'Tempo total',
+          value: _formatDuration(_totalElapsedSeconds),
+        ),
+        _StatisticCard(
+          icon: Icons.route_outlined,
+          label: 'Distância',
+          value: _formatDistance(_totalDistanceMeters),
+        ),
+        _StatisticCard(
+          icon: Icons.speed_outlined,
+          label: 'Ritmo médio',
+          value: _formatPace(_averagePaceSecondsPerKm),
+        ),
+        _StatisticCard(
+          icon: Icons.trending_up,
+          label: 'Velocidade média',
+          value: _formatSpeed(_averageSpeedKmPerHour),
+        ),
+        _StatisticCard(
+          icon: Icons.calendar_today_outlined,
+          label: 'Nesta semana',
+          value: '$_workoutsThisWeek treinos',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkoutCard(WorkoutSessionRecord record) {
+    final progress = _calculateWorkoutProgress(record);
 
     final percentage = (progress * 100).round();
 
@@ -265,30 +385,25 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
             ),
             const SizedBox(height: 12),
             Text(_formatDate(record.completedAt)),
-            const SizedBox(height: 6),
-            Text(
-              'Tempo realizado: '
-              '${_formatDuration(record.elapsedSeconds)}',
+            const SizedBox(height: 8),
+            _RecordMetric(
+              label: 'Tempo',
+              value: _formatDuration(record.elapsedSeconds),
             ),
             const SizedBox(height: 6),
-            Text(
-              'Distância: '
-              '${_formatDistance(record.distanceMeters)}',
+            _RecordMetric(
+              label: 'Distância',
+              value: _formatDistance(record.distanceMeters),
             ),
             const SizedBox(height: 6),
-            Text(
-              'Ritmo médio: '
-              '${_formatPace(record.averagePaceSecondsPerKm)}',
+            _RecordMetric(
+              label: 'Ritmo médio',
+              value: _formatPace(record.averagePaceSecondsPerKm),
             ),
             const SizedBox(height: 6),
-            Text(
-              'Velocidade média: '
-              '${_formatSpeed(record.averageSpeedKmPerHour)}',
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Pontos válidos de GPS: '
-              '${record.validGpsPointCount}',
+            _RecordMetric(
+              label: 'Velocidade média',
+              value: _formatSpeed(record.averageSpeedKmPerHour),
             ),
             const SizedBox(height: 6),
             Text(
@@ -312,6 +427,66 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyPeriod() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 20),
+      child: Column(
+        children: [
+          const Icon(Icons.event_busy_outlined, size: 64),
+          const SizedBox(height: 18),
+          Text(
+            'Nenhum treino neste período',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Selecione outro período ou conclua '
+            'um novo treino.',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDashboard() {
+    final filteredRecords = _filteredRecords;
+
+    return RefreshIndicator(
+      onRefresh: _loadRecords,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Sua evolução',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Acompanhe seus resultados e sua '
+            'frequência de treinos.',
+          ),
+          const SizedBox(height: 22),
+          _buildPeriodSelector(),
+          const SizedBox(height: 20),
+          _buildStatisticsGrid(),
+          const SizedBox(height: 28),
+          Text(
+            'Atividades do período',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          if (filteredRecords.isEmpty)
+            _buildEmptyPeriod()
+          else
+            for (final record in filteredRecords) _buildWorkoutCard(record),
+        ],
       ),
     );
   }
@@ -349,19 +524,19 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(24),
-          children: const [
-            SizedBox(height: 100),
-            Icon(Icons.history, size: 72),
-            SizedBox(height: 20),
+          children: [
+            const SizedBox(height: 100),
+            const Icon(Icons.insights_outlined, size: 72),
+            const SizedBox(height: 20),
             Text(
-              'Nenhum treino registrado',
+              'Nenhuma estatística disponível',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-            SizedBox(height: 10),
-            Text(
-              'Os treinos aparecerão aqui depois '
-              'que forem concluídos e salvos.',
+            const SizedBox(height: 10),
+            const Text(
+              'Conclua e salve um treino para '
+              'começar a acompanhar sua evolução.',
               textAlign: TextAlign.center,
             ),
           ],
@@ -369,30 +544,14 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadRecords,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildSummary(),
-          const SizedBox(height: 18),
-          Text(
-            'Atividades recentes',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          for (final record in _records) _buildRecordCard(record),
-        ],
-      ),
-    );
+    return _buildDashboard();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Histórico de treinos'),
+        title: const Text('Evolução e estatísticas'),
         actions: [
           IconButton(
             onPressed: _isLoading ? null : _loadRecords,
@@ -407,17 +566,17 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
             ),
         ],
       ),
-      body: _buildContent(),
+      body: SafeArea(child: _buildContent()),
     );
   }
 }
 
-class _SummaryItem extends StatelessWidget {
+class _StatisticCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
 
-  const _SummaryItem({
+  const _StatisticCard({
     required this.icon,
     required this.label,
     required this.value,
@@ -425,17 +584,51 @@ class _SummaryItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 28, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecordMetric extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _RecordMetric({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       children: [
-        Icon(icon, size: 30),
-        const SizedBox(height: 8),
+        Expanded(child: Text(label)),
+        const SizedBox(width: 16),
         Text(
           value,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge,
+          textAlign: TextAlign.end,
+          style: Theme.of(context).textTheme.titleSmall,
         ),
-        const SizedBox(height: 4),
-        Text(label, textAlign: TextAlign.center),
       ],
     );
   }
