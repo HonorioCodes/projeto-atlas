@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../history/workout_history_screen.dart';
 import '../../models/training_week_model.dart';
 import '../../models/workout_model.dart';
 import '../../services/plan_storage_service.dart';
 import '../../services/workout_progress_service.dart';
-import '../plans/plans_screen.dart';
-import '../workout/workout_detail_screen.dart';
+import '../history/workout_history_screen.dart';
 import '../location/location_setup_screen.dart';
+import '../plans/plans_screen.dart';
+import '../weight/weight_progress_screen.dart';
+import '../workout/workout_detail_screen.dart';
 
 class TrainingPlanScreen extends StatefulWidget {
   final String planId;
@@ -101,6 +102,26 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
+  Future<void> _openHistory() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return const WorkoutHistoryScreen();
+        },
+      ),
+    );
+  }
+
+  Future<void> _openWeightProgress() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return const WeightProgressScreen();
+        },
+      ),
+    );
+  }
+
   Future<void> _updateWorkout(int index, bool isCompleted) async {
     setState(() {
       _completedWorkouts[index] = isCompleted;
@@ -129,25 +150,11 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       ),
     );
 
-    if (newStatus == null) {
-      return;
-    }
-
-    if (newStatus == _completedWorkouts[index]) {
+    if (newStatus == null || newStatus == _completedWorkouts[index]) {
       return;
     }
 
     await _updateWorkout(index, newStatus);
-  }
-
-  Future<void> _openHistory() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) {
-          return const WorkoutHistoryScreen();
-        },
-      ),
-    );
   }
 
   Future<void> _changePlan() async {
@@ -315,7 +322,12 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
           ),
         );
       } else {
-        widgets.add(const Text('Conclua a semana anterior para liberar.'));
+        widgets.add(
+          const Text(
+            'Conclua a semana anterior '
+            'para liberar.',
+          ),
+        );
       }
 
       widgets.add(const SizedBox(height: 12));
@@ -345,14 +357,19 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
+            onPressed: _openWeightProgress,
+            icon: const Icon(Icons.monitor_weight_outlined),
+            tooltip: 'Evolução do peso',
+          ),
+          IconButton(
             onPressed: _openLocationSetup,
             icon: const Icon(Icons.gps_fixed),
             tooltip: 'Configurar GPS',
           ),
           IconButton(
             onPressed: _openHistory,
-            icon: const Icon(Icons.history),
-            tooltip: 'Histórico de treinos',
+            icon: const Icon(Icons.insights_outlined),
+            tooltip: 'Evolução e estatísticas',
           ),
           IconButton(
             onPressed: _changePlan,
