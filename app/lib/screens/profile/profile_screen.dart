@@ -4,6 +4,7 @@ import '../../models/user_model.dart';
 import '../../models/weight_record.dart';
 import '../../services/user_storage_service.dart';
 import '../../services/weight_history_service.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String selectedPlanTitle;
@@ -28,15 +29,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _errorMessage;
 
   double get _initialWeight {
-    if (_weightRecords.isNotEmpty) {
-      return _weightRecords.last.weightKg;
+    if (_weightRecords.isEmpty) {
+      return _user?.currentWeight ?? 0;
     }
 
-    return _user?.currentWeight ?? 0;
+    WeightRecord? initialRecord;
+
+    for (final record in _weightRecords) {
+      if (!record.id.startsWith('initial-')) {
+        continue;
+      }
+
+      if (initialRecord == null ||
+          record.recordedAt.isBefore(initialRecord.recordedAt)) {
+        initialRecord = record;
+      }
+    }
+
+    return (initialRecord ?? _weightRecords.last).weightKg;
   }
 
   double get _currentWeight {
     if (_weightRecords.isNotEmpty) {
+      for (final record in _weightRecords) {
+        if (!record.id.startsWith('initial-')) {
+          return record.weightKg;
+        }
+      }
+
       return _weightRecords.first.weightKg;
     }
 
@@ -70,7 +90,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadProfile();
   }
 
-  Future<void> _loadProfile() async {
+  Future<bool> _loadProfile() async {
+    if (!mounted) {
+      return false;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -85,10 +109,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       await _weightHistoryService.ensureInitialRecord(user.currentWeight);
 
-      final weightRecords = await _weightHistoryService.loadRecords();
+      final weightRecords = await _weightHistoryService.loadRecordsStrict();
 
       if (!mounted) {
-        return;
+        return false;
       }
 
       setState(() {
@@ -96,15 +120,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _weightRecords = weightRecords;
         _isLoading = false;
       });
+
+      return true;
     } catch (_) {
       if (!mounted) {
-        return;
+        return false;
       }
 
       setState(() {
+        _user = null;
+        _weightRecords = [];
         _isLoading = false;
         _errorMessage = 'Não foi possível carregar seu perfil.';
       });
+
+      return false;
+    }
+  }
+
+  Future<void> _openEditProfile() async {
+    final user = _user;
+
+    if (user == null) {
+      return;
+    }
+
+    final wasUpdated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) {
+          return EditProfileScreen(
+            user: user,
+            initialWeight: _initialWeight,
+            currentWeight: _currentWeight,
+          );
+        },
+      ),
+    );
+
+    if (wasUpdated != true || !mounted) {
+      return;
+    }
+
+    final profileWasReloaded = await _loadProfile();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (profileWasReloaded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Perfil atualizado com sucesso.')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível recarregar o perfil atualizado.'),
+        ),
+      );
     }
   }
 
@@ -346,7 +418,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Text(_errorMessage!, textAlign: TextAlign.center),
               const SizedBox(height: 20),
               FilledButton.icon(
-                onPressed: _loadProfile,
+                onPressed: () async {
+                  await _loadProfile();
+                },
                 icon: const Icon(Icons.refresh),
                 label: const Text('Tentar novamente'),
               ),
@@ -363,7 +437,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: _loadProfile,
+      onRefresh: () async {
+        await _loadProfile();
+      },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
@@ -371,43 +447,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text('Meu perfil', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 6),
           const Text(
-            'Confira seus dados pessoais, '
-            'medidas e objetivos.',
+            'Confira e atualize seus dados '
+            'pessoais, medidas e objetivos.',
           ),
           const SizedBox(height: 20),
           _buildProfileHeader(user),
           const SizedBox(height: 16),
           _buildSummaryGrid(user),
           const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _openEditProfile,
+              icon: const Icon(Icons.edit_outlined),
+              label: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text('Editar meus dados'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
           _buildPersonalDataSection(user),
           const SizedBox(height: 16),
           _buildPhysicalDataSection(user),
           const SizedBox(height: 16),
           _buildGoalsSection(user),
-          const SizedBox(height: 20),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.info_outline,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'A edição do peso inicial, '
-                      'meta e demais informações '
-                      'será disponibilizada na '
-                      'próxima etapa.',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -420,7 +485,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Meu perfil'),
         actions: [
           IconButton(
-            onPressed: _isLoading ? null : _loadProfile,
+            onPressed: _isLoading || _user == null ? null : _openEditProfile,
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Editar perfil',
+          ),
+          IconButton(
+            onPressed: _isLoading
+                ? null
+                : () async {
+                    await _loadProfile();
+                  },
             icon: const Icon(Icons.refresh),
             tooltip: 'Atualizar perfil',
           ),
