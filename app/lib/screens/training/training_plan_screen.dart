@@ -8,6 +8,7 @@ import '../charts/progress_charts_screen.dart';
 import '../history/workout_history_screen.dart';
 import '../location/location_setup_screen.dart';
 import '../plans/plans_screen.dart';
+import '../profile/profile_screen.dart';
 import '../weight/weight_progress_screen.dart';
 import '../workout/workout_detail_screen.dart';
 
@@ -95,6 +96,16 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     });
   }
 
+  Future<void> _openProfile() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) {
+          return ProfileScreen(selectedPlanTitle: widget.title);
+        },
+      ),
+    );
+  }
+
   Future<void> _openLocationSetup() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -135,16 +146,16 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  Future<void> _handleEvolutionMenu(_EvolutionMenuAction action) async {
+  Future<void> _handleEvolutionMenu(_EvolutionMenuAction action) {
     switch (action) {
       case _EvolutionMenuAction.weight:
-        await _openWeightProgress();
+        return _openWeightProgress();
 
       case _EvolutionMenuAction.statistics:
-        await _openHistory();
+        return _openHistory();
 
       case _EvolutionMenuAction.charts:
-        await _openProgressCharts();
+        return _openProgressCharts();
     }
   }
 
@@ -395,6 +406,11 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       appBar: AppBar(
         title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
+          IconButton(
+            onPressed: _openProfile,
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'Meu perfil',
+          ),
           IconButton(
             onPressed: _openLocationSetup,
             icon: const Icon(Icons.gps_fixed),
