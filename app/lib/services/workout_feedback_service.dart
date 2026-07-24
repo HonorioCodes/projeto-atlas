@@ -15,6 +15,21 @@ class WorkoutFeedbackService {
   SoundHandle? _workoutCompleteHandle;
   bool _workoutCompleteSoundPlayed = false;
   bool _isDisposed = false;
+  bool _soundEnabled = true;
+  bool _vibrationEnabled = true;
+
+  bool get soundEnabled {
+    return _soundEnabled;
+  }
+
+  bool get vibrationEnabled {
+    return _vibrationEnabled;
+  }
+
+  void configure({required bool soundEnabled, required bool vibrationEnabled}) {
+    _soundEnabled = soundEnabled;
+    _vibrationEnabled = vibrationEnabled;
+  }
 
   Future<void> initialize() {
     _initFuture ??= _initialize();
@@ -22,17 +37,29 @@ class WorkoutFeedbackService {
   }
 
   Future<void> onStepChanged() async {
-    await _runSafely(() => HapticFeedback.mediumImpact());
-    await _runSafely(_playStepChangeSound);
+    if (_vibrationEnabled) {
+      await _runSafely(() => HapticFeedback.mediumImpact());
+    }
+
+    if (_soundEnabled) {
+      await _runSafely(_playStepChangeSound);
+    }
   }
 
   Future<void> onWorkoutCompleted() async {
-    await _runSafely(() => HapticFeedback.successNotification());
-    await _runSafely(_playWorkoutCompleteSound);
+    if (_vibrationEnabled) {
+      await _runSafely(() => HapticFeedback.successNotification());
+    }
+
+    if (_soundEnabled) {
+      await _runSafely(_playWorkoutCompleteSound);
+    }
   }
 
   Future<void> onWarningOrConfirmation() async {
-    await _runSafely(() => HapticFeedback.lightImpact());
+    if (_vibrationEnabled) {
+      await _runSafely(() => HapticFeedback.lightImpact());
+    }
   }
 
   void resetCompletionFeedback() {

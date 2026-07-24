@@ -6,9 +6,9 @@ import '../../services/plan_storage_service.dart';
 import '../../services/workout_progress_service.dart';
 import '../charts/progress_charts_screen.dart';
 import '../history/workout_history_screen.dart';
-import '../location/location_setup_screen.dart';
 import '../plans/plans_screen.dart';
 import '../profile/profile_screen.dart';
+import '../settings/training_settings_screen.dart';
 import '../weight/weight_progress_screen.dart';
 import '../workout/workout_detail_screen.dart';
 
@@ -106,11 +106,11 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  Future<void> _openLocationSetup() async {
+  Future<void> _openTrainingSettings() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) {
-          return const LocationSetupScreen();
+          return const TrainingSettingsScreen();
         },
       ),
     );
@@ -412,9 +412,9 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
             tooltip: 'Meu perfil',
           ),
           IconButton(
-            onPressed: _openLocationSetup,
-            icon: const Icon(Icons.gps_fixed),
-            tooltip: 'Configurar GPS',
+            onPressed: _openTrainingSettings,
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Configurações do treino',
           ),
           PopupMenuButton<_EvolutionMenuAction>(
             icon: const Icon(Icons.insights_outlined),

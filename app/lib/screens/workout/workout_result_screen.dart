@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../models/training_settings.dart';
 import '../../models/workout_session_record.dart';
 import '../../services/workout_history_service.dart';
+import '../../utils/distance_formatter.dart';
 
 class WorkoutResultScreen extends StatefulWidget {
   final String workoutTitle;
@@ -10,6 +12,7 @@ class WorkoutResultScreen extends StatefulWidget {
   final bool completedManually;
   final double distanceMeters;
   final int validGpsPointCount;
+  final DistanceDisplayUnit distanceDisplayUnit;
 
   const WorkoutResultScreen({
     super.key,
@@ -19,6 +22,7 @@ class WorkoutResultScreen extends StatefulWidget {
     required this.completedManually,
     required this.distanceMeters,
     required this.validGpsPointCount,
+    this.distanceDisplayUnit = DistanceDisplayUnit.automatic,
   });
 
   @override
@@ -83,14 +87,6 @@ class _WorkoutResultScreenState extends State<WorkoutResultScreen> {
     final hoursText = hours.toString().padLeft(2, '0');
 
     return '$hoursText:$minutesText:$secondsText';
-  }
-
-  String _formatDistance(double meters) {
-    if (meters < 1000) {
-      return '${meters.round()} m';
-    }
-
-    return '${(meters / 1000).toStringAsFixed(2)} km';
   }
 
   String _formatPace(int? secondsPerKilometer) {
@@ -209,7 +205,10 @@ class _WorkoutResultScreenState extends State<WorkoutResultScreen> {
                       const Divider(height: 28),
                       _ResultRow(
                         label: 'Distância',
-                        value: _formatDistance(widget.distanceMeters),
+                        value: formatDistanceForDisplay(
+                          widget.distanceMeters,
+                          widget.distanceDisplayUnit,
+                        ),
                       ),
                       const Divider(height: 28),
                       _ResultRow(
