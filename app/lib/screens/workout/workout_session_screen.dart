@@ -1,12 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../models/training_settings.dart';
 import '../../models/workout_model.dart';
 import '../../models/workout_step_model.dart';
 import '../../services/location_service.dart';
+import '../../services/training_settings_service.dart';
 import '../../services/workout_feedback_service.dart';
 import '../../services/workout_location_tracker.dart';
+import '../../utils/distance_formatter.dart';
 import 'workout_result_screen.dart';
 
 class WorkoutSessionScreen extends StatefulWidget {
@@ -37,8 +41,15 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   bool _completionFeedbackEmitted = false;
   bool _resultScreenOpen = false;
   bool _allowExit = false;
+  bool _settingsLoaded = false;
+  bool _gpsTrackingActive = false;
+  bool _continueWithoutGps = false;
 
   WorkoutLocationSnapshot _locationSnapshot = WorkoutLocationSnapshot.initial;
+
+  TrainingSettings _settings = TrainingSettings.defaults;
+
+  final TrainingSettingsService _settingsService = TrainingSettingsService();
 
   final WorkoutFeedbackService _feedbackService = WorkoutFeedbackService();
 
@@ -99,6 +110,31 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     _remainingStepSeconds = _currentStep.durationSeconds;
 
     unawaited(_feedbackService.initialize());
+    unawaited(_loadSettings());
+  }
+
+  Future<void> _loadSettings() async {
+    TrainingSettings settings;
+
+    try {
+      settings = await _settingsService.loadSettings();
+    } catch (_) {
+      settings = TrainingSettings.defaults;
+    }
+
+    _feedbackService.configure(
+      soundEnabled: settings.soundEnabled,
+      vibrationEnabled: settings.vibrationEnabled,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _settings = settings;
+      _settingsLoaded = true;
+    });
   }
 
   int _readFallbackDuration() {
@@ -114,6 +150,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     _timer?.cancel();
 
     unawaited(_locationTracker.dispose());
+
+    unawaited(_setScreenAwake(false));
 
     unawaited(_feedbackService.dispose());
 
@@ -157,14 +195,6 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     return '$hoursText:$minutesText:$secondsText';
   }
 
-  String _formatDistance(double meters) {
-    if (meters < 1000) {
-      return '${meters.round()} m';
-    }
-
-    return '${(meters / 1000).toStringAsFixed(2)} km';
-  }
-
   String _formatAveragePace() {
     final pace = _averagePaceSecondsPerKm;
 
@@ -195,7 +225,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
 
     if (_isStartingWorkout) {
-      return 'Preparando GPS';
+      return _settings.requireGpsToStart
+          ? 'Preparando GPS'
+          : 'Preparando treino';
     }
 
     if (_isRunning) {
@@ -255,13 +287,18 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   }
 
   Future<void> _startOrResumeWorkout() async {
-    if (_isRunning || _isStartingWorkout) {
+    if (_isRunning || _isStartingWorkout || !_settingsLoaded) {
       return;
     }
 
     setState(() {
       _isStartingWorkout = true;
     });
+
+    if (_continueWithoutGps) {
+      _startTimer(showWithoutGpsMessage: false);
+      return;
+    }
 
     try {
       final access = await _locationTracker.start(
@@ -273,52 +310,108 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       }
 
       if (!access.isGranted) {
-        setState(() {
-          _isStartingWorkout = false;
-        });
+        _gpsTrackingActive = false;
 
-        await _showLocationAccessDialog(access.status);
+        if (_settings.requireGpsToStart) {
+          setState(() {
+            _isStartingWorkout = false;
+          });
+
+          await _showLocationAccessDialog(access.status);
+
+          return;
+        }
+
+        _continueWithoutGps = true;
+        _startTimer(showWithoutGpsMessage: true);
 
         return;
       }
 
-      setState(() {
-        _isRunning = true;
-        _isStartingWorkout = false;
-        _hasStarted = true;
-      });
-
-      _timer = Timer.periodic(const Duration(seconds: 1), _handleTimerTick);
+      _gpsTrackingActive = true;
+      _startTimer(showWithoutGpsMessage: false);
     } catch (_) {
       if (!mounted) {
         return;
       }
 
+      _gpsTrackingActive = false;
+
+      if (!_settings.requireGpsToStart) {
+        _continueWithoutGps = true;
+
+        try {
+          await _locationTracker.stop();
+        } catch (_) {
+          // Falhas ao encerrar um início incompleto não impedem o treino.
+        }
+
+        if (!mounted) {
+          return;
+        }
+
+        _startTimer(showWithoutGpsMessage: true);
+        return;
+      }
+
       setState(() {
         _isStartingWorkout = false;
       });
 
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('Não foi possível iniciar o GPS'),
-            content: const Text(
-              'Verifique a localização do celular '
-              'e tente iniciar novamente.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                },
-                child: const Text('Entendi'),
-              ),
-            ],
-          );
-        },
+      await _showGpsStartError();
+    }
+  }
+
+  void _startTimer({required bool showWithoutGpsMessage}) {
+    if (!mounted) {
+      return;
+    }
+
+    _timer?.cancel();
+
+    setState(() {
+      _isRunning = true;
+      _isStartingWorkout = false;
+      _hasStarted = true;
+    });
+
+    _timer = Timer.periodic(const Duration(seconds: 1), _handleTimerTick);
+
+    unawaited(_setScreenAwake(true));
+
+    if (showWithoutGpsMessage) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Treino iniciado sem GPS. '
+            'Distância e ritmo não serão registrados.',
+          ),
+        ),
       );
     }
+  }
+
+  Future<void> _showGpsStartError() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Não foi possível iniciar o GPS'),
+          content: const Text(
+            'Verifique a localização do celular '
+            'e tente iniciar novamente.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Entendi'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _showLocationAccessDialog(LocationAccessStatus status) async {
@@ -391,6 +484,50 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
   }
 
+  Future<void> _setScreenAwake(bool enabled) async {
+    if (enabled && !_settings.keepScreenAwake) {
+      return;
+    }
+
+    try {
+      if (enabled) {
+        await WakelockPlus.enable();
+      } else {
+        await WakelockPlus.disable();
+      }
+    } catch (_) {
+      // Falhas ao controlar a tela não podem interromper o treino.
+    }
+  }
+
+  Future<void> _pauseLocationTracking() async {
+    if (!_gpsTrackingActive) {
+      return;
+    }
+
+    _gpsTrackingActive = false;
+
+    try {
+      await _locationTracker.pause();
+    } catch (_) {
+      // O cronômetro e os controles devem continuar funcionais sem o stream.
+    }
+  }
+
+  Future<void> _stopLocationTracking() async {
+    if (!_gpsTrackingActive) {
+      return;
+    }
+
+    _gpsTrackingActive = false;
+
+    try {
+      await _locationTracker.stop();
+    } catch (_) {
+      // Uma falha ao encerrar o GPS não pode impedir a saída do treino.
+    }
+  }
+
   void _handleTimerTick(Timer timer) {
     if (!mounted) {
       timer.cancel();
@@ -430,7 +567,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   }
 
   Future<void> _completeWorkoutAutomatically() async {
-    await _locationTracker.stop();
+    await _stopLocationTracking();
+    await _setScreenAwake(false);
 
     await _emitWorkoutCompletedFeedback();
 
@@ -444,7 +582,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   void _pauseWorkout() {
     _timer?.cancel();
 
-    unawaited(_locationTracker.pause());
+    unawaited(_pauseLocationTracking());
+    unawaited(_setScreenAwake(false));
 
     setState(() {
       _isRunning = false;
@@ -455,6 +594,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     _timer?.cancel();
 
     unawaited(_locationTracker.reset());
+    unawaited(_setScreenAwake(false));
+
+    _gpsTrackingActive = false;
+    _continueWithoutGps = false;
 
     setState(() {
       _currentStepIndex = 0;
@@ -481,10 +624,11 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     await _feedbackService.onWorkoutCompleted();
   }
 
-  void _exitScreen({required bool completed}) {
+  Future<void> _exitScreen({required bool completed}) async {
     _timer?.cancel();
 
-    unawaited(_locationTracker.stop());
+    await _stopLocationTracking();
+    await _setScreenAwake(false);
 
     if (!mounted) {
       return;
@@ -506,7 +650,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
   Future<void> _requestExit() async {
     if (!_hasActiveWorkout) {
-      _exitScreen(completed: false);
+      await _exitScreen(completed: false);
       return;
     }
 
@@ -514,7 +658,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
     _timer?.cancel();
 
-    await _locationTracker.pause();
+    await _pauseLocationTracking();
+    await _setScreenAwake(false);
 
     if (_isRunning) {
       setState(() {
@@ -564,7 +709,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
 
     if (shouldAbandon == true) {
-      _exitScreen(completed: false);
+      await _exitScreen(completed: false);
       return;
     }
 
@@ -590,6 +735,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
             completedManually: completedManually,
             distanceMeters: _locationSnapshot.distanceMeters,
             validGpsPointCount: _locationSnapshot.validPointCount,
+            distanceDisplayUnit: _settings.distanceDisplayUnit,
           );
         },
       ),
@@ -602,7 +748,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
 
     if (shouldSave == true) {
-      _exitScreen(completed: true);
+      await _exitScreen(completed: true);
     }
   }
 
@@ -611,7 +757,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
     _timer?.cancel();
 
-    await _locationTracker.pause();
+    await _pauseLocationTracking();
+    await _setScreenAwake(false);
 
     if (!mounted) {
       return;
@@ -656,7 +803,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
 
     if (confirmed == true) {
-      await _locationTracker.stop();
+      await _stopLocationTracking();
 
       await _emitWorkoutCompletedFeedback();
 
@@ -699,7 +846,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                 Expanded(
                   child: _MetricItem(
                     label: 'Distância',
-                    value: _formatDistance(_locationSnapshot.distanceMeters),
+                    value: formatDistanceForDisplay(
+                      _locationSnapshot.distanceMeters,
+                      _settings.distanceDisplayUnit,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -731,6 +881,13 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_settingsLoaded) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.workout.title)),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final remainingTotalSeconds = _totalSeconds - _elapsedSeconds;
 
     return PopScope<bool>(

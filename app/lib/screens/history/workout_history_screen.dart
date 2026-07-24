@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../models/training_settings.dart';
 import '../../models/workout_session_record.dart';
+import '../../services/training_settings_service.dart';
 import '../../services/workout_history_service.dart';
+import '../../utils/distance_formatter.dart';
 
 enum _StatisticsPeriod { sevenDays, thirtyDays, all }
 
@@ -16,8 +19,10 @@ class WorkoutHistoryScreen extends StatefulWidget {
 
 class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
   final WorkoutHistoryService _historyService = WorkoutHistoryService();
+  final TrainingSettingsService _settingsService = TrainingSettingsService();
 
   List<WorkoutSessionRecord> _records = [];
+  TrainingSettings _settings = TrainingSettings.defaults;
 
   _StatisticsPeriod _selectedPeriod = _StatisticsPeriod.thirtyDays;
 
@@ -348,6 +353,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
     try {
       final records = await _historyService.loadRecords();
+      final settings = await _loadSettingsSafely();
 
       if (!mounted) {
         return;
@@ -355,6 +361,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
       setState(() {
         _records = records;
+        _settings = settings;
         _isLoading = false;
       });
     } catch (_) {
@@ -366,6 +373,14 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
         _isLoading = false;
         _errorMessage = 'Não foi possível carregar suas estatísticas.';
       });
+    }
+  }
+
+  Future<TrainingSettings> _loadSettingsSafely() async {
+    try {
+      return await _settingsService.loadSettings();
+    } catch (_) {
+      return TrainingSettings.defaults;
     }
   }
 
@@ -462,11 +477,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
   }
 
   String _formatDistance(double meters) {
-    if (meters < 1000) {
-      return '${meters.round()} m';
-    }
-
-    return '${(meters / 1000).toStringAsFixed(2)} km';
+    return formatDistanceForDisplay(meters, _settings.distanceDisplayUnit);
   }
 
   String _formatPace(int? secondsPerKilometer) {

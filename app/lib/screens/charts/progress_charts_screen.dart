@@ -3,11 +3,14 @@ import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/training_settings.dart';
 import '../../models/weight_record.dart';
 import '../../models/workout_session_record.dart';
+import '../../services/training_settings_service.dart';
 import '../../services/user_storage_service.dart';
 import '../../services/weight_history_service.dart';
 import '../../services/workout_history_service.dart';
+import '../../utils/distance_formatter.dart';
 
 class ProgressChartsScreen extends StatefulWidget {
   const ProgressChartsScreen({super.key});
@@ -24,9 +27,11 @@ class _ProgressChartsScreenState extends State<ProgressChartsScreen> {
   final WeightHistoryService _weightHistoryService = WeightHistoryService();
 
   final UserStorageService _userStorageService = UserStorageService();
+  final TrainingSettingsService _settingsService = TrainingSettingsService();
 
   List<WorkoutSessionRecord> _workouts = [];
   List<WeightRecord> _weightRecords = [];
+  TrainingSettings _settings = TrainingSettings.defaults;
 
   int _selectedWeeks = 8;
 
@@ -105,6 +110,7 @@ class _ProgressChartsScreenState extends State<ProgressChartsScreen> {
       final workouts = await _workoutHistoryService.loadRecords();
 
       final weights = await _weightHistoryService.loadRecords();
+      final settings = await _loadSettingsSafely();
 
       if (!mounted) {
         return;
@@ -113,6 +119,7 @@ class _ProgressChartsScreenState extends State<ProgressChartsScreen> {
       setState(() {
         _workouts = workouts;
         _weightRecords = weights;
+        _settings = settings;
         _isLoading = false;
       });
     } catch (_) {
@@ -127,6 +134,14 @@ class _ProgressChartsScreenState extends State<ProgressChartsScreen> {
     }
   }
 
+  Future<TrainingSettings> _loadSettingsSafely() async {
+    try {
+      return await _settingsService.loadSettings();
+    } catch (_) {
+      return TrainingSettings.defaults;
+    }
+  }
+
   DateTime _startOfWeek(DateTime date) {
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
@@ -138,11 +153,7 @@ class _ProgressChartsScreenState extends State<ProgressChartsScreen> {
   }
 
   String _formatDistance(double meters) {
-    if (meters < 1000) {
-      return '${meters.round()} m';
-    }
-
-    return '${(meters / 1000).toStringAsFixed(2)} km';
+    return formatDistanceForDisplay(meters, _settings.distanceDisplayUnit);
   }
 
   String _formatDuration(int totalSeconds) {
